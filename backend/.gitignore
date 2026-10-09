@@ -1,0 +1,6 @@
+.venv/
+.env
+__pycache__/
+*.py[cod]
+# Runtime copies written by the PDF ingestion pipeline (DOCUMENT_STORAGE_PATH).
+data/documents/

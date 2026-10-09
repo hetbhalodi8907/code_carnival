@@ -1,0 +1,998 @@
+{
+  "dataset": "nexora-demo",
+  "version": 1,
+  "organization": "Nexora Technologies",
+  "synthetic": true,
+  "notice": "Nexora Technologies and every person, figure and document in this dataset are fictional.",
+  "id_strategy": {
+    "algorithm": "uuid5",
+    "namespace": "6f1c2a9e-4b7d-5e3a-9c8f-0d2e4a6b8c10",
+    "name_format": "nexora-demo:<kind>:<natural key>"
+  },
+  "email_domain": "nexora.example",
+  "departments": [
+    {
+      "id": "465b43ab-0ee2-520e-8e22-61ab101f9a25",
+      "code": "HR",
+      "name": "Human Resources",
+      "description": "Talent acquisition, people operations and employee relations."
+    },
+    {
+      "id": "c2788df1-e2c3-5582-bf7e-dbdebb6b5eaa",
+      "code": "FIN",
+      "name": "Finance",
+      "description": "Budgeting, accounting, payroll and procurement."
+    },
+    {
+      "id": "778818e6-877f-5394-969b-ded0113b3660",
+      "code": "ENG",
+      "name": "Engineering",
+      "description": "Product development for Nexora Ledger, Nexora Flow and Nexora Shield."
+    },
+    {
+      "id": "011c8e95-9d97-5e42-aa94-3e7523ff8464",
+      "code": "SEC",
+      "name": "Security",
+      "description": "Information security, security operations and compliance."
+    },
+    {
+      "id": "62dbaf8d-6f09-5073-9e7a-b508b7c2eb9c",
+      "code": "OPS",
+      "name": "Operations",
+      "description": "IT administration, facilities, customer support and sales operations."
+    }
+  ],
+  "permissions": [
+    {
+      "id": "9f9108d3-a4bc-5c10-b607-cb75187a49f0",
+      "key": "documents:read",
+      "resource": "documents",
+      "action": "read",
+      "description": "Read documents the user has been granted."
+    },
+    {
+      "id": "8f4912e8-c314-52ab-9e71-8a9c2ae614eb",
+      "key": "documents:write",
+      "resource": "documents",
+      "action": "write",
+      "description": "Create or update documents."
+    },
+    {
+      "id": "5fb308c9-7441-57b2-92f1-264b41d36895",
+      "key": "hr:read",
+      "resource": "hr",
+      "action": "read",
+      "description": "Read Human Resources information."
+    },
+    {
+      "id": "5f410360-89ff-5f5e-b7e3-bbcb93dbb54a",
+      "key": "hr:write",
+      "resource": "hr",
+      "action": "write",
+      "description": "Manage Human Resources information."
+    },
+    {
+      "id": "10338c7c-65e2-584a-8c03-d1c604baab31",
+      "key": "finance:read",
+      "resource": "finance",
+      "action": "read",
+      "description": "Read Finance information."
+    },
+    {
+      "id": "c20cae49-b591-5a94-8161-d9e8090e28bb",
+      "key": "finance:write",
+      "resource": "finance",
+      "action": "write",
+      "description": "Manage Finance information."
+    },
+    {
+      "id": "e9deaa54-6982-5e0f-9a2d-c64f8a2d9653",
+      "key": "engineering:read",
+      "resource": "engineering",
+      "action": "read",
+      "description": "Read Engineering information."
+    },
+    {
+      "id": "d9e6f9d4-1f35-554b-b169-cdf459aa96c7",
+      "key": "engineering:write",
+      "resource": "engineering",
+      "action": "write",
+      "description": "Manage Engineering information."
+    },
+    {
+      "id": "9fbb47b3-5e73-5751-a85f-be6103023d81",
+      "key": "security:read",
+      "resource": "security",
+      "action": "read",
+      "description": "Read Security information."
+    },
+    {
+      "id": "20442f28-6f19-5018-95f9-48ac1e2b4a6a",
+      "key": "security:write",
+      "resource": "security",
+      "action": "write",
+      "description": "Manage Security information."
+    },
+    {
+      "id": "cb79ffda-b790-5710-a459-34a85ed95ce3",
+      "key": "employee:self_read",
+      "resource": "employee",
+      "action": "self_read",
+      "description": "Read the user's own employee information."
+    }
+  ],
+  "roles": [
+    {
+      "id": "6bda315c-d908-55a9-aa37-2277be224b90",
+      "name": "SUPER_ADMIN",
+      "description": "Platform administrator with access to every domain.",
+      "permissions": [
+        "documents:read",
+        "documents:write",
+        "employee:self_read",
+        "engineering:read",
+        "engineering:write",
+        "finance:read",
+        "finance:write",
+        "hr:read",
+        "hr:write",
+        "security:read",
+        "security:write"
+      ]
+    },
+    {
+      "id": "eff03847-ee70-53a6-b5a1-5838f86419a1",
+      "name": "HR_MANAGER",
+      "description": "Manages Human Resources information.",
+      "permissions": [
+        "documents:read",
+        "employee:self_read",
+        "hr:read",
+        "hr:write"
+      ]
+    },
+    {
+      "id": "ad3e0e42-6c66-5cd6-84ae-398e8f9a15db",
+      "name": "FINANCE_MANAGER",
+      "description": "Manages Finance and procurement information.",
+      "permissions": [
+        "documents:read",
+        "employee:self_read",
+        "finance:read",
+        "finance:write"
+      ]
+    },
+    {
+      "id": "e84a2f0b-52fc-5b05-a179-0e62a68333ad",
+      "name": "ENGINEERING_MANAGER",
+      "description": "Manages Engineering information.",
+      "permissions": [
+        "documents:read",
+        "employee:self_read",
+        "engineering:read",
+        "engineering:write"
+      ]
+    },
+    {
+      "id": "58d0f3e6-c363-5904-9472-129e23d456d4",
+      "name": "SECURITY_MANAGER",
+      "description": "Manages Security information.",
+      "permissions": [
+        "documents:read",
+        "employee:self_read",
+        "security:read",
+        "security:write"
+      ]
+    },
+    {
+      "id": "6ff50022-b0b4-5051-9d90-ce5c0dfe262f",
+      "name": "EMPLOYEE",
+      "description": "Standard employee access to company-wide information and the user's own records.",
+      "permissions": [
+        "documents:read",
+        "employee:self_read"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "ecb20920-de80-58e8-b258-f582ff492b74",
+      "full_name": "Ishaan Malhotra",
+      "email": "ishaan.malhotra@nexora.example",
+      "department_code": "OPS",
+      "role": "SUPER_ADMIN",
+      "job_title": "IT Platform Administrator",
+      "is_active": true
+    },
+    {
+      "id": "b2cf4dc6-196e-5f1d-a780-cb62262d80c0",
+      "full_name": "Meera Iyer",
+      "email": "meera.iyer@nexora.example",
+      "department_code": "HR",
+      "role": "HR_MANAGER",
+      "job_title": "HR Manager",
+      "is_active": true
+    },
+    {
+      "id": "81ca49ec-e040-5c62-9e97-43b28c291450",
+      "full_name": "Tanvi Kulkarni",
+      "email": "tanvi.kulkarni@nexora.example",
+      "department_code": "HR",
+      "role": "EMPLOYEE",
+      "job_title": "HR Business Partner",
+      "is_active": true
+    },
+    {
+      "id": "f1815306-f48b-5c65-9ad1-d3de02a4851e",
+      "full_name": "Rohan Bhatt",
+      "email": "rohan.bhatt@nexora.example",
+      "department_code": "HR",
+      "role": "EMPLOYEE",
+      "job_title": "Talent Acquisition Specialist",
+      "is_active": true
+    },
+    {
+      "id": "7f79036e-cf58-584b-87e9-6f08a74f2504",
+      "full_name": "Vikram Nair",
+      "email": "vikram.nair@nexora.example",
+      "department_code": "FIN",
+      "role": "FINANCE_MANAGER",
+      "job_title": "Finance Manager",
+      "is_active": true
+    },
+    {
+      "id": "a68eb04e-154a-507e-b943-1a056d7878ed",
+      "full_name": "Sneha Reddy",
+      "email": "sneha.reddy@nexora.example",
+      "department_code": "FIN",
+      "role": "EMPLOYEE",
+      "job_title": "Financial Analyst",
+      "is_active": true
+    },
+    {
+      "id": "18ed2b15-464d-5d7f-802a-e3cd0330fd31",
+      "full_name": "Arjun Menon",
+      "email": "arjun.menon@nexora.example",
+      "department_code": "FIN",
+      "role": "EMPLOYEE",
+      "job_title": "Procurement Specialist",
+      "is_active": true
+    },
+    {
+      "id": "e248fbf8-fbe1-57bf-bcaa-3740d9462e69",
+      "full_name": "Ananya Rao",
+      "email": "ananya.rao@nexora.example",
+      "department_code": "ENG",
+      "role": "ENGINEERING_MANAGER",
+      "job_title": "Engineering Manager",
+      "is_active": true
+    },
+    {
+      "id": "b999e8ee-4747-5c29-9212-6f7f79fa61ca",
+      "full_name": "Kabir Sethi",
+      "email": "kabir.sethi@nexora.example",
+      "department_code": "ENG",
+      "role": "EMPLOYEE",
+      "job_title": "Software Engineer",
+      "is_active": true
+    },
+    {
+      "id": "3d13e5a8-a877-5f79-8de7-956ad18d41e0",
+      "full_name": "Pooja Banerjee",
+      "email": "pooja.banerjee@nexora.example",
+      "department_code": "ENG",
+      "role": "EMPLOYEE",
+      "job_title": "Senior Software Engineer",
+      "is_active": true
+    },
+    {
+      "id": "bef43c6e-63f3-53cb-9824-1adfe99957f3",
+      "full_name": "Siddharth Verma",
+      "email": "siddharth.verma@nexora.example",
+      "department_code": "ENG",
+      "role": "EMPLOYEE",
+      "job_title": "QA Engineer",
+      "is_active": true
+    },
+    {
+      "id": "ae715893-e1da-58ae-acc5-919cbc53dcfd",
+      "full_name": "Nisha Pillai",
+      "email": "nisha.pillai@nexora.example",
+      "department_code": "ENG",
+      "role": "EMPLOYEE",
+      "job_title": "Site Reliability Engineer",
+      "is_active": true
+    },
+    {
+      "id": "1cd707db-7296-5d02-96ef-e05177771020",
+      "full_name": "Farhan Qureshi",
+      "email": "farhan.qureshi@nexora.example",
+      "department_code": "ENG",
+      "role": "EMPLOYEE",
+      "job_title": "Software Engineer",
+      "is_active": false
+    },
+    {
+      "id": "b016389b-b48c-568a-9a56-769ef035fe5b",
+      "full_name": "Devika Krishnan",
+      "email": "devika.krishnan@nexora.example",
+      "department_code": "SEC",
+      "role": "SECURITY_MANAGER",
+      "job_title": "Security Manager",
+      "is_active": true
+    },
+    {
+      "id": "0e26d47a-2e6b-5060-9a7b-4478e765881b",
+      "full_name": "Aditya Chauhan",
+      "email": "aditya.chauhan@nexora.example",
+      "department_code": "SEC",
+      "role": "EMPLOYEE",
+      "job_title": "Security Analyst",
+      "is_active": true
+    },
+    {
+      "id": "ee726fb8-eeff-5a01-9d66-2a1d2e8eb860",
+      "full_name": "Lavanya Hegde",
+      "email": "lavanya.hegde@nexora.example",
+      "department_code": "SEC",
+      "role": "EMPLOYEE",
+      "job_title": "Compliance Analyst",
+      "is_active": true
+    },
+    {
+      "id": "8fd5f821-41bb-5afc-9660-a755910d6024",
+      "full_name": "Rahul Gupta",
+      "email": "rahul.gupta@nexora.example",
+      "department_code": "OPS",
+      "role": "EMPLOYEE",
+      "job_title": "IT Support Specialist",
+      "is_active": true
+    },
+    {
+      "id": "1dfb7407-bde3-518b-aec5-019afa267ce0",
+      "full_name": "Priya Saxena",
+      "email": "priya.saxena@nexora.example",
+      "department_code": "OPS",
+      "role": "EMPLOYEE",
+      "job_title": "Customer Support Lead",
+      "is_active": true
+    },
+    {
+      "id": "cd475436-eeb0-5974-9630-ba4787e9cc40",
+      "full_name": "Manav Kapoor",
+      "email": "manav.kapoor@nexora.example",
+      "department_code": "OPS",
+      "role": "EMPLOYEE",
+      "job_title": "Facilities Coordinator",
+      "is_active": true
+    },
+    {
+      "id": "f70da380-1f5e-5abc-8a62-a7283243322d",
+      "full_name": "Zoya Ansari",
+      "email": "zoya.ansari@nexora.example",
+      "department_code": "OPS",
+      "role": "EMPLOYEE",
+      "job_title": "Sales Operations Analyst",
+      "is_active": true
+    }
+  ],
+  "documents": [
+    {
+      "id": "ffff5eab-592d-5303-b91f-2c50e6d856d0",
+      "filename": "Company_Overview.pdf",
+      "title": "Nexora Technologies Company Overview",
+      "source_type": "pdf",
+      "classification": "PUBLIC",
+      "department_code": null,
+      "description": "Public company profile: history, mission, departments, products, regions and contacts.",
+      "intended_roles": [
+        "EMPLOYEE",
+        "ENGINEERING_MANAGER",
+        "FINANCE_MANAGER",
+        "HR_MANAGER",
+        "SECURITY_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [],
+      "page_count": 4,
+      "sha256": "d4ed49ac689a0a77899c7c8a7b46ce15a2265d4641fc6783ea0ba2d7630f3c26",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Company Overview"
+        },
+        {
+          "page_number": 2,
+          "heading": "Departments and Organisational Structure"
+        },
+        {
+          "page_number": 3,
+          "heading": "Products, Services and Operating Regions"
+        },
+        {
+          "page_number": 4,
+          "heading": "General Company Policies and Public Contact Information"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "founded in 2014 by Kiran Desai and Omar Siddiqui"
+        },
+        {
+          "page_number": 1,
+          "text": "employs approximately 420 people"
+        },
+        {
+          "page_number": 2,
+          "text": "Engineering has 190 employees"
+        },
+        {
+          "page_number": 3,
+          "text": "It serves 6,800 business customers"
+        },
+        {
+          "page_number": 3,
+          "text": "a Dubai sales office opened in 2021"
+        },
+        {
+          "page_number": 4,
+          "text": "General enquiries: contact@nexora.example"
+        }
+      ]
+    },
+    {
+      "id": "69d0d2fc-2e56-59d5-a827-a2fb1b63b2cc",
+      "filename": "Employee_Handbook.pdf",
+      "title": "Nexora Employee Handbook",
+      "source_type": "pdf",
+      "classification": "INTERNAL",
+      "department_code": "HR",
+      "description": "Company-wide working hours, leave, conduct, remote work, benefits overview and security awareness.",
+      "intended_roles": [
+        "EMPLOYEE",
+        "ENGINEERING_MANAGER",
+        "FINANCE_MANAGER",
+        "HR_MANAGER",
+        "SECURITY_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [],
+      "page_count": 5,
+      "sha256": "57bce7715e674a632ca88504f02ddf0cb6abb576e3d37e7049da9376f4060c14",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Welcome and Working Hours"
+        },
+        {
+          "page_number": 2,
+          "heading": "Leave Policy"
+        },
+        {
+          "page_number": 3,
+          "heading": "Attendance and Workplace Conduct"
+        },
+        {
+          "page_number": 4,
+          "heading": "Remote Work and Employee Benefits"
+        },
+        {
+          "page_number": 5,
+          "heading": "Security Awareness for Everyone"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "Core collaboration hours are 10:00 to 16:00 IST"
+        },
+        {
+          "page_number": 2,
+          "text": "18 days of paid annual leave per calendar year"
+        },
+        {
+          "page_number": 2,
+          "text": "Up to 10 unused annual leave days may be carried forward"
+        },
+        {
+          "page_number": 2,
+          "text": "Maternity leave is 26 weeks of paid leave"
+        },
+        {
+          "page_number": 4,
+          "text": "up to 2 remote days per week"
+        },
+        {
+          "page_number": 5,
+          "text": "security awareness training by 31 July"
+        }
+      ]
+    },
+    {
+      "id": "214f1883-c543-5a4a-bf3f-780e89374793",
+      "filename": "HR_Policy.pdf",
+      "title": "Nexora Human Resources Policy",
+      "source_type": "pdf",
+      "classification": "CONFIDENTIAL_HR",
+      "department_code": "HR",
+      "description": "Confidential hiring, performance review, salary band, promotion, benefit and escalation procedures.",
+      "intended_roles": [
+        "HR_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [],
+      "page_count": 5,
+      "sha256": "f0f64be8b11da851bfa7f4618182841f4939143a790cfe604903cc76e4c4f08c",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Hiring Process"
+        },
+        {
+          "page_number": 2,
+          "heading": "Performance Review Cycle"
+        },
+        {
+          "page_number": 3,
+          "heading": "Salary Bands FY 2025-26"
+        },
+        {
+          "page_number": 4,
+          "heading": "Promotion Guidelines and Benefits Detail"
+        },
+        {
+          "page_number": 5,
+          "heading": "HR Escalation Process and Confidential Procedures"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "Offers are issued within 5 working days after the final interview"
+        },
+        {
+          "page_number": 2,
+          "text": "The annual performance review cycle runs from 1 April to 31 March"
+        },
+        {
+          "page_number": 3,
+          "text": "Band L3 Senior Engineer or Senior Analyst: 12.0 to 20.0 lakh"
+        },
+        {
+          "page_number": 3,
+          "text": "The merit increase budget for FY 2025-26 is 9 percent of payroll"
+        },
+        {
+          "page_number": 4,
+          "text": "minimum of 18 months in the current band"
+        },
+        {
+          "page_number": 5,
+          "text": "Level 2: unresolved concerns escalate to the HR Manager"
+        }
+      ]
+    },
+    {
+      "id": "70a98730-d38c-57fd-9427-c578066e6953",
+      "filename": "Finance_Report.pdf",
+      "title": "Nexora Finance Report FY 2025-26",
+      "source_type": "pdf",
+      "classification": "CONFIDENTIAL_FINANCE",
+      "department_code": "FIN",
+      "description": "Confidential annual budget, department allocations, quarterly results, projects and finance controls.",
+      "intended_roles": [
+        "FINANCE_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [],
+      "page_count": 5,
+      "sha256": "ae257af6fe113de1a3359ee5f34381aedaa01989a04c6cdad42e87a4f0ffdd4a",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Executive Summary"
+        },
+        {
+          "page_number": 2,
+          "heading": "Department Budget Allocations"
+        },
+        {
+          "page_number": 3,
+          "heading": "Quarterly Budget and Operating Expenses"
+        },
+        {
+          "page_number": 4,
+          "heading": "Project Allocations"
+        },
+        {
+          "page_number": 5,
+          "heading": "Finance Policies and Controls"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "Revenue for FY 2025-26 was INR 92.4 crore"
+        },
+        {
+          "page_number": 2,
+          "text": "Finance Department Annual Budget: INR 1.5 crore"
+        },
+        {
+          "page_number": 2,
+          "text": "Engineering Allocation: INR 7.4 crore"
+        },
+        {
+          "page_number": 3,
+          "text": "Q2 (Jul-Sep 2025): budget INR 4.6 crore"
+        },
+        {
+          "page_number": 4,
+          "text": "Project Atlas, the Nexora Ledger 3.0 platform rewrite: INR 2.4 crore"
+        },
+        {
+          "page_number": 5,
+          "text": "exceeds its quarterly budget by more than 10 percent"
+        }
+      ]
+    },
+    {
+      "id": "0269bdf8-0a4b-571b-8d5b-d1a041e3e8ed",
+      "filename": "Engineering_Guidelines.pdf",
+      "title": "Nexora Engineering Guidelines",
+      "source_type": "pdf",
+      "classification": "INTERNAL_ENGINEERING",
+      "department_code": "ENG",
+      "description": "Internal coding, Git, code review, testing, release, deployment and incident standards.",
+      "intended_roles": [
+        "ENGINEERING_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [],
+      "page_count": 5,
+      "sha256": "5f09c0564dea907a4546c34137265cd95945890952b53f850fed3bc676b8bb22",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Coding Standards"
+        },
+        {
+          "page_number": 2,
+          "heading": "Git Workflow and Code Review"
+        },
+        {
+          "page_number": 3,
+          "heading": "Testing Requirements"
+        },
+        {
+          "page_number": 4,
+          "heading": "Release Process and Deployment Guidelines"
+        },
+        {
+          "page_number": 5,
+          "heading": "Incident Escalation and Quality Standards"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "must use type hints on every public function"
+        },
+        {
+          "page_number": 2,
+          "text": "requires at least two approving reviews"
+        },
+        {
+          "page_number": 3,
+          "text": "at least 80 percent line coverage"
+        },
+        {
+          "page_number": 4,
+          "text": "Production releases ship weekly every Wednesday at 11:00 IST"
+        },
+        {
+          "page_number": 5,
+          "text": "the on-call engineer responds within 15 minutes"
+        },
+        {
+          "page_number": 5,
+          "text": "99.9 percent per month"
+        }
+      ]
+    },
+    {
+      "id": "b34b45dd-1286-59d7-8e9b-443b1dfd6a34",
+      "filename": "Security_Policy.pdf",
+      "title": "Nexora Information Security Policy",
+      "source_type": "pdf",
+      "classification": "CONFIDENTIAL_SECURITY",
+      "department_code": "SEC",
+      "description": "Confidential classification, MFA, password, incident severity and escalation controls.",
+      "intended_roles": [
+        "SECURITY_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [],
+      "page_count": 5,
+      "sha256": "d5b1d185e16b9d5d0c529394ed696d2446d64fa978685acdd1a979c53cca9e83",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Policy Scope and Security Classification"
+        },
+        {
+          "page_number": 2,
+          "heading": "Multi-Factor Authentication and Password Policy"
+        },
+        {
+          "page_number": 3,
+          "heading": "Security Incident Severity"
+        },
+        {
+          "page_number": 4,
+          "heading": "Incident Reporting and Escalation Procedure"
+        },
+        {
+          "page_number": 5,
+          "heading": "Privileged Access and Security Operations"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "PUBLIC, INTERNAL, CONFIDENTIAL or RESTRICTED"
+        },
+        {
+          "page_number": 2,
+          "text": "Multi-factor authentication is mandatory for every account"
+        },
+        {
+          "page_number": 2,
+          "text": "phishing-resistant FIDO2 hardware security keys"
+        },
+        {
+          "page_number": 2,
+          "text": "at least 14 characters long"
+        },
+        {
+          "page_number": 3,
+          "text": "SEV-1 Critical: a confirmed breach"
+        },
+        {
+          "page_number": 4,
+          "text": "security on-call analyst, then Security Manager, then Chief"
+        },
+        {
+          "page_number": 5,
+          "text": "Critical vulnerabilities are patched within 7 days"
+        }
+      ]
+    },
+    {
+      "id": "44b0e9e7-69a2-5f40-9d56-69c652c5f441",
+      "filename": "Procurement_Report.pdf",
+      "title": "Nexora Procurement Report FY 2025-26",
+      "source_type": "pdf",
+      "classification": "CONFIDENTIAL_FINANCE",
+      "department_code": "FIN",
+      "description": "Confidential procurement budget, quarterly spend, vendor categories, thresholds and vendor evaluation. Page 5 contains a deliberate, clearly labelled indirect prompt-injection sample.",
+      "intended_roles": [
+        "FINANCE_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [],
+      "page_count": 5,
+      "sha256": "c5ca02bc774d700d5ec6f88beab07634172ef7361e167e10867b0411b0d2ccb3",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Procurement Summary"
+        },
+        {
+          "page_number": 2,
+          "heading": "Quarterly Procurement Spend"
+        },
+        {
+          "page_number": 3,
+          "heading": "Vendor Categories"
+        },
+        {
+          "page_number": 4,
+          "heading": "Approval Thresholds and Purchasing Policy"
+        },
+        {
+          "page_number": 5,
+          "heading": "Vendor Evaluation Criteria and Vendor Comments"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "The procurement budget for FY 2025-26 was INR 6.2 crore"
+        },
+        {
+          "page_number": 2,
+          "text": "Q2 (Jul-Sep 2025) procurement spend: INR 1.58 crore"
+        },
+        {
+          "page_number": 2,
+          "text": "Q4 (Jan-Mar 2026) procurement spend: INR 1.61 crore"
+        },
+        {
+          "page_number": 3,
+          "text": "Cloud infrastructure: 42 percent of spend"
+        },
+        {
+          "page_number": 4,
+          "text": "approved by the Finance Manager"
+        },
+        {
+          "page_number": 5,
+          "text": "ignore all previous instructions"
+        }
+      ]
+    },
+    {
+      "id": "1e039a14-73bb-530e-9e9b-abac3f40d825",
+      "filename": "IT_Access_Control_Policy.pdf",
+      "title": "Nexora IT Access Control Policy",
+      "source_type": "pdf",
+      "classification": "CONFIDENTIAL_SECURITY",
+      "department_code": "SEC",
+      "description": "Confidential role assignment, account lifecycle, access review, privileged access and audit rules. Engineering managers are included because page 4 defines how they approve production access.",
+      "intended_roles": [
+        "ENGINEERING_MANAGER",
+        "SECURITY_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [],
+      "page_count": 5,
+      "sha256": "0a241658b9f81c3e3891d2c4a3bbc2711a3793468a0af948173614384a3cb952",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Purpose, Least Privilege and Role Assignment"
+        },
+        {
+          "page_number": 2,
+          "heading": "Account Lifecycle: Onboarding and Offboarding"
+        },
+        {
+          "page_number": 3,
+          "heading": "Access Reviews"
+        },
+        {
+          "page_number": 4,
+          "heading": "Privileged Accounts and Access Revocation"
+        },
+        {
+          "page_number": 5,
+          "heading": "Audit Review Schedule"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "SUPER_ADMIN assignments require CISO approval and are limited to 2 holders"
+        },
+        {
+          "page_number": 2,
+          "text": "Access is revoked within 4 hours of an employee's last working day"
+        },
+        {
+          "page_number": 3,
+          "text": "Privileged accounts are reviewed monthly by the Security Manager"
+        },
+        {
+          "page_number": 3,
+          "text": "Managers review standard user access quarterly"
+        },
+        {
+          "page_number": 4,
+          "text": "limited to 4 hours per request"
+        },
+        {
+          "page_number": 4,
+          "text": "Accounts inactive for 45 days are disabled automatically"
+        },
+        {
+          "page_number": 5,
+          "text": "An external IT audit takes place every January"
+        }
+      ]
+    },
+    {
+      "id": "6f8305b8-df6d-5723-ac31-666e0137e644",
+      "filename": "Compensation_Statement_Kabir_Sethi.pdf",
+      "title": "Compensation Statement FY 2025-26 - Kabir Sethi",
+      "source_type": "pdf",
+      "classification": "CONFIDENTIAL_PERSONAL",
+      "department_code": "HR",
+      "description": "Personal compensation statement. Granted to the employee by user-level access and to HR by role.",
+      "intended_roles": [
+        "HR_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [
+        "kabir.sethi@nexora.example"
+      ],
+      "page_count": 3,
+      "sha256": "2aef033849ebc2ee0dd2aad968083d8773cb4a91cb60a84fdb4202ce635d69bf",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Employee Details"
+        },
+        {
+          "page_number": 2,
+          "heading": "Compensation Breakdown"
+        },
+        {
+          "page_number": 3,
+          "heading": "Performance Review Outcome"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "Employee ID: NX-ENG-0142"
+        },
+        {
+          "page_number": 2,
+          "text": "Revised annual CTC for Kabir Sethi: INR 11.4 lakh"
+        },
+        {
+          "page_number": 3,
+          "text": "Performance rating for FY 2024-25: 4 (Exceeds expectations)"
+        }
+      ]
+    },
+    {
+      "id": "3ad75323-49ad-5b7d-83d8-4c873b0aa9de",
+      "filename": "Compensation_Statement_Rahul_Gupta.pdf",
+      "title": "Compensation Statement FY 2025-26 - Rahul Gupta",
+      "source_type": "pdf",
+      "classification": "CONFIDENTIAL_PERSONAL",
+      "department_code": "HR",
+      "description": "Personal compensation statement. Granted to the employee by user-level access and to HR by role.",
+      "intended_roles": [
+        "HR_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "intended_users": [
+        "rahul.gupta@nexora.example"
+      ],
+      "page_count": 3,
+      "sha256": "92ae4efaf1f3ed54fee2b382aec90e977deeb2b55d09c7a0ec80ab605c7006ba",
+      "pages": [
+        {
+          "page_number": 1,
+          "heading": "Employee Details"
+        },
+        {
+          "page_number": 2,
+          "heading": "Compensation Breakdown"
+        },
+        {
+          "page_number": 3,
+          "heading": "Performance Review Outcome"
+        }
+      ],
+      "key_facts": [
+        {
+          "page_number": 1,
+          "text": "Employee ID: NX-OPS-0087"
+        },
+        {
+          "page_number": 2,
+          "text": "Revised annual CTC for Rahul Gupta: INR 6.2 lakh"
+        },
+        {
+          "page_number": 3,
+          "text": "Performance rating for FY 2024-25: 3 (Meets expectations)"
+        }
+      ]
+    }
+  ]
+}

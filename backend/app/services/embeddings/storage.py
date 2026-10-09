@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app import models
+from app.services.embeddings.provider import EmbeddingProviderError
+from app.services.embeddings.service import EmbeddingService, EmbeddingServiceError
+
+
+logger = logging.getLogger("app.embeddings")
+
+
+class EmbeddingStorageError(RuntimeError):
+    """Raised when document embeddings cannot be generated or persisted."""
+
+
+class DocumentNotFoundError(EmbeddingStorageError):
+    """Raised when the requested document does not exist."""
+
+
+class DocumentHasNoChunksError(EmbeddingStorageError):
+    """Raised when the requested document has no chunks to embed."""
+
+
+@dataclass(frozen=True)
+class EmbeddingStorageResult:
+    document_id: UUID
+    chunks_processed: int
+    embeddings_created: int
+    embedding_model: str
+    status: str
+
+
+async def store_document_embeddings(
+    *,
+    document_id: UUID,
+    session_factory: async_sessionmaker[AsyncSession],
+    service: EmbeddingService,
+) -> EmbeddingStorageResult:
+    """Generate and persist embeddings for all chunks of one document in one transaction."""
+    session = session_factory()
+    try:
+        document_result = await session.execute(
+            select(models.Document.id).where(models.Document.id == document_id)
+        )
+        if document_result.scalar_one_or_none() is None:
+            raise DocumentNotFoundError("The document does not exist.")
+
+        chunks_result = await session.execute(
+            select(models.DocumentChunk)
+            .where(models.DocumentChunk.document_id == document_id)
+            .order_by(models.DocumentChunk.chunk_index)
+        )
+        chunks = chunks_result.scalars().all()
+        if not chunks:
+            raise DocumentHasNoChunksError("The document has no chunks to embed.")
+
+        vectors = await service.embed_texts([chunk.content for chunk in chunks])
+        for chunk, vector in zip(chunks, vectors, strict=True):
+            chunk.embedding = vector
+            chunk.embedding_model = service.model
+
+        await session.commit()
+    except (EmbeddingStorageError, EmbeddingProviderError, EmbeddingServiceError):
+        await session.rollback()
+        raise
+    except Exception as exc:
+        await session.rollback()
+        # Database errors embed bound parameters (full vectors), so only the type is logged.
+        logger.error("Embedding persistence failed error_type=%s", type(exc).__name__)
+        raise EmbeddingStorageError("Document embeddings could not be persisted.") from None
+    finally:
+        await session.close()
+
+    return EmbeddingStorageResult(
+        document_id=document_id,
+        chunks_processed=len(chunks),
+        embeddings_created=len(vectors),
+        embedding_model=service.model,
+        status="completed",
+    )

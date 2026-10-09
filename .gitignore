@@ -1,0 +1,38 @@
+# Environment files: real secrets stay local. Templates are tracked.
+.env
+.env.*
+!.env.example
+*.local
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python caches and tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node / frontend build outputs
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Runtime copies written by the PDF ingestion pipeline (DOCUMENT_STORAGE_PATH)
+backend/data/documents/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/

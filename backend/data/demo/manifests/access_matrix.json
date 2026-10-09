@@ -1,0 +1,124 @@
+{
+  "dataset": "nexora-demo",
+  "version": 1,
+  "organization": "Nexora Technologies",
+  "synthetic": true,
+  "notice": "Nexora Technologies and every person, figure and document in this dataset are fictional.",
+  "policy": "default_deny",
+  "description": "A user may access a document only through an explicit role grant (document_role_access) or user grant (document_user_access). Department, classification and filename do not grant access.",
+  "documents": [
+    {
+      "document_id": "ffff5eab-592d-5303-b91f-2c50e6d856d0",
+      "filename": "Company_Overview.pdf",
+      "classification": "PUBLIC",
+      "allowed_roles": [
+        "EMPLOYEE",
+        "ENGINEERING_MANAGER",
+        "FINANCE_MANAGER",
+        "HR_MANAGER",
+        "SECURITY_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": []
+    },
+    {
+      "document_id": "69d0d2fc-2e56-59d5-a827-a2fb1b63b2cc",
+      "filename": "Employee_Handbook.pdf",
+      "classification": "INTERNAL",
+      "allowed_roles": [
+        "EMPLOYEE",
+        "ENGINEERING_MANAGER",
+        "FINANCE_MANAGER",
+        "HR_MANAGER",
+        "SECURITY_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": []
+    },
+    {
+      "document_id": "214f1883-c543-5a4a-bf3f-780e89374793",
+      "filename": "HR_Policy.pdf",
+      "classification": "CONFIDENTIAL_HR",
+      "allowed_roles": [
+        "HR_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": []
+    },
+    {
+      "document_id": "70a98730-d38c-57fd-9427-c578066e6953",
+      "filename": "Finance_Report.pdf",
+      "classification": "CONFIDENTIAL_FINANCE",
+      "allowed_roles": [
+        "FINANCE_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": []
+    },
+    {
+      "document_id": "0269bdf8-0a4b-571b-8d5b-d1a041e3e8ed",
+      "filename": "Engineering_Guidelines.pdf",
+      "classification": "INTERNAL_ENGINEERING",
+      "allowed_roles": [
+        "ENGINEERING_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": []
+    },
+    {
+      "document_id": "b34b45dd-1286-59d7-8e9b-443b1dfd6a34",
+      "filename": "Security_Policy.pdf",
+      "classification": "CONFIDENTIAL_SECURITY",
+      "allowed_roles": [
+        "SECURITY_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": []
+    },
+    {
+      "document_id": "44b0e9e7-69a2-5f40-9d56-69c652c5f441",
+      "filename": "Procurement_Report.pdf",
+      "classification": "CONFIDENTIAL_FINANCE",
+      "allowed_roles": [
+        "FINANCE_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": []
+    },
+    {
+      "document_id": "1e039a14-73bb-530e-9e9b-abac3f40d825",
+      "filename": "IT_Access_Control_Policy.pdf",
+      "classification": "CONFIDENTIAL_SECURITY",
+      "allowed_roles": [
+        "ENGINEERING_MANAGER",
+        "SECURITY_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": []
+    },
+    {
+      "document_id": "6f8305b8-df6d-5723-ac31-666e0137e644",
+      "filename": "Compensation_Statement_Kabir_Sethi.pdf",
+      "classification": "CONFIDENTIAL_PERSONAL",
+      "allowed_roles": [
+        "HR_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": [
+        "kabir.sethi@nexora.example"
+      ]
+    },
+    {
+      "document_id": "3ad75323-49ad-5b7d-83d8-4c873b0aa9de",
+      "filename": "Compensation_Statement_Rahul_Gupta.pdf",
+      "classification": "CONFIDENTIAL_PERSONAL",
+      "allowed_roles": [
+        "HR_MANAGER",
+        "SUPER_ADMIN"
+      ],
+      "allowed_users": [
+        "rahul.gupta@nexora.example"
+      ]
+    }
+  ]
+}
