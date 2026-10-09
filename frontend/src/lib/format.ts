@@ -1,6 +1,6 @@
 /** Presentation helpers only. They format backend values; they never decide access. */
 
-import type { Citation } from "@/types/assistant";
+import type { RetrievedSource } from "@/types/assistant";
 
 export function initials(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -8,10 +8,9 @@ export function initials(fullName: string): string {
   return letters.toUpperCase();
 }
 
-/** Cosine similarity (0–1) as a whole percentage. */
+/** Cosine similarity as a plain two-decimal score (it is not a confidence percentage). */
 export function formatSimilarity(similarity: number): string {
-  const clamped = Math.min(1, Math.max(0, similarity));
-  return `${Math.round(clamped * 100)}%`;
+  return Math.min(1, Math.max(-1, similarity)).toFixed(2);
 }
 
 /** "finance:read" -> "finance · read". */
@@ -19,7 +18,14 @@ export function formatPermission(permission: string): string {
   return permission.replace(":", " · ");
 }
 
-/** A source's display name; vector search results carry no document title. */
-export function citationLabel(citation: Citation): string {
-  return citation.title ?? "Authorized source";
+/** A source's display name, as the server sent it. */
+export function sourceLabel(source: RetrievedSource): string {
+  return source.title.trim() || "Untitled document";
+}
+
+/** A file size for people: "812 B", "340 KB", "1.4 MB". */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

@@ -1,22 +1,15 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark light" />
-    <meta name="description" content="Nexora Secure AI Workspace" />
+    <meta name="color-scheme" content="light" />
+    <meta name="description" content="NEXORA — Secure Enterprise AI Knowledge Platform. Secure knowledge. Trusted answers." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Nexora · Secure AI Workspace</title>
-    <script>
-      // Apply the saved theme before first paint (dark by default).
-      try {
-        if (localStorage.getItem("nexora.theme") === "light") document.documentElement.classList.remove("dark");
-      } catch (e) {}
-    </script>
+    <title>NEXORA — Secure Enterprise AI Knowledge Platform</title>
     <style>
       /* Boot screen: visible until React mounts and replaces #root, so a slow or failed start is never a blank page. */
-      html { background: #f9fafc; color: #121720; }
-      html.dark { background: #090c13; color: #edf0f4; }
+      html { background: #f6f7f9; color: #1f2430; }
       .boot { display: grid; place-content: center; gap: 10px; min-height: 100vh; padding: 16px; text-align: center; font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
       .boot strong { font-size: 13px; letter-spacing: 0.24em; }
       .boot span { max-width: 28rem; opacity: 0.7; }

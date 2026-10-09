@@ -8,6 +8,7 @@ from uuid import UUID
 
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import contains_eager
 
 from app import models
 from app.services.authorization import document_access_condition
@@ -31,12 +32,15 @@ class VectorSearchExecutionError(VectorSearchError):
 class VectorSearchResult:
     chunk_id: UUID
     document_id: UUID
+    document_title: str
     chunk_index: int
     page_number: int | None
     source_locator: str | None
     content: str
     distance: float
     similarity: float
+    source_type: str = "pdf"
+    """The owning document's source_type ("pdf" or "image"), read in the same statement."""
 
 
 class VectorSearchService:
@@ -104,12 +108,14 @@ class VectorSearchService:
             VectorSearchResult(
                 chunk_id=chunk.id,
                 document_id=chunk.document_id,
+                document_title=chunk.document.title,
                 chunk_index=chunk.chunk_index,
                 page_number=chunk.page_number,
                 source_locator=chunk.source_locator,
                 content=chunk.content,
                 distance=float(distance),
                 similarity=1.0 - float(distance),
+                source_type=chunk.document.source_type,
             )
             for chunk, distance in rows
         ]
@@ -134,6 +140,10 @@ class VectorSearchService:
         distance = models.DocumentChunk.embedding.cosine_distance(query_embedding)
         return (
             select(models.DocumentChunk, distance.label("distance"))
+            # Titles come from this same statement, so labelling results never needs a
+            # second query.
+            .join(models.DocumentChunk.document)
+            .options(contains_eager(models.DocumentChunk.document))
             .where(models.DocumentChunk.embedding.is_not(None))
             .where(models.DocumentChunk.embedding_model == self._embedding_model)
             # Authorization is part of WHERE, so it is applied before ORDER BY/LIMIT.

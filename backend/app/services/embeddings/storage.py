@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import models
-from app.services.embeddings.provider import EmbeddingProviderError
+from app.services.embeddings.provider import EmbeddingConfigurationError, EmbeddingProviderError
 from app.services.embeddings.service import EmbeddingService, EmbeddingServiceError
 
 
@@ -84,3 +85,44 @@ async def store_document_embeddings(
         embedding_model=service.model,
         status="completed",
     )
+
+
+EmbeddingOutcome = Literal["completed", "failed", "not_configured"]
+
+
+@dataclass(frozen=True)
+class IngestEmbeddingResult:
+    status: EmbeddingOutcome
+    model: str | None
+    """The embedding model used; None unless ``status`` is "completed"."""
+
+
+async def embed_ingested_document(
+    *,
+    document_id: UUID,
+    session_factory: async_sessionmaker[AsyncSession],
+    service: EmbeddingService | None = None,
+) -> IngestEmbeddingResult:
+    """Embed a just-ingested document with the configured model so it is searchable at once.
+
+    Used by every upload path (PDF and image). A missing or failing embedding provider never
+    fails the upload: the document stays stored, unsearchable until embedded (retry with
+    ``POST /embeddings/documents/{id}``), and the outcome is reported to the caller. Only the
+    outcome is logged, never text.
+    """
+    try:
+        if service is None:
+            from app.services.embeddings.service import create_embedding_service
+
+            service = create_embedding_service()
+        result = await store_document_embeddings(
+            document_id=document_id, session_factory=session_factory, service=service
+        )
+    except EmbeddingConfigurationError:
+        outcome: EmbeddingOutcome = "not_configured"
+    except (EmbeddingProviderError, EmbeddingServiceError, EmbeddingStorageError):
+        outcome = "failed"
+    else:
+        return IngestEmbeddingResult("completed", result.embedding_model)
+    logger.warning("Ingested document left without embeddings document_id=%s outcome=%s", document_id, outcome)
+    return IngestEmbeddingResult(outcome, None)

@@ -4,18 +4,18 @@ import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex w-fit shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium [&_svg]:size-3",
+  "inline-flex h-[26px] w-fit shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold [&_svg]:size-3.5",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary/15 text-primary",
-        outline: "border-border text-foreground",
-        muted: "border-transparent bg-muted text-muted-foreground",
-        success: "border-success/25 bg-success/10 text-success",
-        warning: "border-warning/30 bg-warning/10 text-warning",
+        default: "border-primary/20 bg-primary-soft text-primary",
+        muted: "border-border bg-muted text-muted-foreground",
+        success: "border-success/25 bg-success-soft text-success-strong",
+        warning: "border-warning/30 bg-warning-soft text-warning-strong",
+        destructive: "border-destructive/25 bg-destructive-soft text-destructive-strong",
       },
     },
-    defaultVariants: { variant: "default" },
+    defaultVariants: { variant: "muted" },
   },
 );
 

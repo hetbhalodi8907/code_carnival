@@ -60,7 +60,7 @@ The ORM metadata is the source of truth for the Part 2.2 schema. Alembic generat
 
 Embeddings live in a nullable `document_chunks.embedding vector(1536)` column, so there is no separate chunk or vector table. The dimension is fixed by migration `466650ac5b92` and mirrored by `EMBEDDING_VECTOR_DIMENSION` in the model. `EMBEDDING_DIMENSION` must equal it, and the provider factory fails fast otherwise. Changing to a model with another dimension requires a new migration. Vectors are never truncated or padded.
 
-## ADR-011: OpenAI `text-embedding-3-small` as the single embedding provider
+## ADR-011: OpenAI `text-embedding-3-small` as the single embedding provider (superseded by ADR-030)
 
 **Status:** Accepted
 
@@ -155,6 +155,52 @@ The chat calls the planned `POST /api/v1/assistant/query` through an isolated cl
 **Status:** Accepted
 
 For presentations, six fixed, intentionally public demo credentials (one active seeded user per role) are set through the existing `set_demo_passwords.py` (`--hackathon-accounts`). They are stored as Argon2id hashes, validated against the dataset and database, and refused in production. The login page renders them from one frontend config whose cards only fill the form; authentication remains `POST /api/v1/auth/login`, and the displayed identity comes from `/auth/me`. A backend test keeps the frontend and backend lists identical. SUPER_ADMIN is displayed as "CEO / Super Admin" without changing backend role semantics.
+
+## ADR-027: RAG context comes only from secure retrieval, as an internal service
+
+**Status:** Accepted
+
+Part 6.1 builds context in `ContextBuilder`, whose only data source is `VectorSearchService.search_text`, called as the authenticated user. The builder holds no database session, so it cannot query, widen or post-filter. Every context item is one authorized result, in ranking order. Document titles are read through a join in the same authorized SQL statement rather than a second query. The public `/search/vector` response is unchanged.
+
+Questions are capped at 2,000 characters (`RagQuery`), because a question is placed in a prompt next to the context. `/search/vector` keeps its existing 20,000-character limit. `top_k` uses the search service's bounds (1–20).
+
+Rendered sources are delimited by markers carrying a digest of the whole context. The digest is deterministic for identical input, and document text cannot reproduce it, so injected text cannot fake a source boundary. Chunk text is never rewritten.
+
+`RAG_MAX_CONTEXT_CHARACTERS` caps the context by dropping whole lower-ranked items, counted in `omitted_result_count`. No `POST /api/v1/rag/context` debug endpoint was added: the service is tested directly, and the Part 6.2 assistant endpoint will be its first HTTP caller.
+
+## ADR-028: Grounded generation as an internal service over the existing provider
+
+**Status:** Accepted
+
+`AnswerGenerator` reuses `LLMProvider`/`create_llm_provider()`; there is no second client or configuration. It takes the authenticated user and refuses a context built for another user or question. Its only evidence is the Part 6.1 `RetrievalContext`, it runs no query, search or file read, and it makes at most one provider call with no tools.
+
+The system message is a fixed rule set. Retrieved text appears only in the user message, inside the 6.1 boundaries. "No answer in the sources" is signalled with `INSUFFICIENT_CONTEXT`, so the service can return a deterministic answer instead of interpreting free text.
+
+Empty or blank context never reaches the model. Truncated output (`finish_reason="length"`) is a failure rather than a partial answer, because a cut-off answer can drop qualifications. Provider exceptions are not chained onto `RagGenerationError`, because their text can echo request content.
+
+`[S<n>]` references are kept only as `unverified_source_numbers`; Part 7 validates them against `GenerationResult.context`. A backward-compatible `LLMProviderTimeoutError` subclass lets callers tell timeouts from other failures.
+
+## ADR-029: Assistant API is a thin, authenticated orchestration with unverified references
+
+**Status:** Accepted
+
+`POST /api/v1/assistant/query` reuses `require_permission("documents", "read")`, `RagQuery`, `create_context_builder` and `create_answer_generator`. It adds no retrieval, authorization, prompt or provider logic. Configuration is checked before retrieval, so a missing LLM key never costs an embedding call.
+
+The response separates server-derived `sources` (context metadata, only when answered, no chunk text) from the model's `unverified_source_numbers`. There is deliberately no `citations` field until Part 7 validates references. Statuses reuse the 6.2 set.
+
+Errors keep the existing envelope and the services' fixed messages, mapped to stable HTTP statuses: 502 for upstream failure or bad output, 503 for unconfigured or unavailable, 504 for timeout, 500 for an inconsistent context, and 422 for an unsafe question.
+
+The request schema is `RagQuery` (`query`), not the frontend's provisional `question`. The frontend client must be aligned separately.
+
+## ADR-030: Local sentence-transformers embeddings (384 dimensions) by default
+
+**Status:** Accepted (supersedes ADR-011 as the default)
+
+To run without a paid OpenAI key, embeddings use the local `sentence-transformers/all-MiniLM-L6-v2` model: 384 dimensions, CPU inference for deterministic vectors, L2-normalized, loaded once per process and run in a worker thread. Groq stays the LLM; it has no embeddings API.
+
+Migration `a1d4c7e9f3b2` resizes `document_chunks.embedding` to `vector(384)`. pgvector cannot cast between dimensions, and vectors from different models must never be compared, so both directions clear existing embeddings and their model labels first. Retrieval still filters on `embedding_model`, so only the configured model's vectors are searched.
+
+The OpenAI provider remains available (`EMBEDDING_PROVIDER=openai`) and requests 384 dimensions. A model download, load or encoding failure is a provider error (502); a missing package or key is a configuration error (503). Only error types are logged.
 
 ## Future decisions
 

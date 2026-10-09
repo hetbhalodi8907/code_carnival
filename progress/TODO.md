@@ -77,7 +77,8 @@
 - [x] Persist embeddings with model metadata (Part 4.3).
 - [x] Cosine-distance top-K vector search service and `POST /api/v1/search/vector` (Part 4.3).
 - [x] Tests (unit, live pgvector, API).
-- [ ] Live OpenAI verification once an `OPENAI_API_KEY` is supplied.
+- [x] Local embeddings (`all-MiniLM-L6-v2`, 384 dimensions) replace OpenAI as the default; migration `a1d4c7e9f3b2`.
+- [ ] Optional: live verification of the OpenAI embedding provider (not needed for the demo).
 - [ ] Moved to Phase 5: permission-aware vector retrieval.
 
 ## Dataset Generation — Nexora demo dataset
@@ -88,7 +89,7 @@
 - [x] Dataset manifest, access matrix and security test scenarios.
 - [x] Idempotent generator, verify-only mode and demo-only reset.
 - [x] Dataset tests: PDFs, database, manifests, access matrix, idempotency, reset safety.
-- [ ] Optional: run `--with-embeddings` once an `OPENAI_API_KEY` is available.
+- [x] `--with-embeddings` run on `rag_system` with the local model (45/45 chunks).
 
 ## Phase 5 — Authentication and authorization
 
@@ -104,13 +105,21 @@
 ## Phase 6 — Secure RAG
 
 - [x] LLM provider layer: Groq via OpenAI-compatible API, live-verified (Part 6.2 provider only).
-- [ ] Choose an embedding source for real data (OpenAI key, or a local embedding model); Groq has none.
+- [x] Choose an embedding source for real data: local sentence-transformers model (Groq has none).
+- [x] Part 6.1: query validation (`RagQuery`), shared `top_k` bounds, identity fields rejected.
+- [x] Part 6.1: secure context builder over the existing authorization-aware vector search (no own queries, ranking order kept).
+- [x] Part 6.1: structured, deterministic context with source metadata and unforgeable source boundaries; explicit `no_authorized_context`.
+- [x] Part 6.1: tests proving context chunks are exactly the authorized search results, plus role, inactive-user, SUPER_ADMIN-grant and injection-as-data tests.
+- [ ] Live context verification on `rag_system` (needs an embedding provider and demo embeddings).
 
-- [ ] Implement the RAG orchestrator.
-- [ ] Add configurable LLM provider adapter.
-- [ ] Isolate untrusted retrieval content.
-- [ ] Add prompt-injection regression tests.
-- [ ] Verify unauthorized data never enters the LLM context.
+- [x] Part 6.2: grounded generation service (`AnswerGenerator`) over the existing Groq provider; no LLM call without usable context.
+- [x] Configurable LLM provider adapter (existing `LLMProvider`; timeouts now a distinct `LLMProviderTimeoutError`).
+- [x] Isolate untrusted retrieval content (user message only, unforgeable boundaries, untrusted-data rule; boundary-token questions refused).
+- [x] Prompt-injection regression tests with fake providers (prompt structure; live model behaviour not verified).
+- [x] Verify unauthorized data never enters the LLM prompt (pipeline tests on the demo dataset; zero SQL during generation).
+- [x] Live generation check against Groq on synthetic context (3 calls: grounded, insufficient context, injection).
+- [x] Live generation over real demo context (four role scenarios plus failure handling).
+- [x] Part 6.3: `POST /api/v1/assistant/query` composing `ContextBuilder` + `AnswerGenerator` (24 API tests).
 
 ## Phase 7 — Citations and grounding
 
@@ -133,15 +142,16 @@
 
 ## Phase 10 — AI assistant API
 
-- [ ] Add secure chat endpoint.
+- [x] Add secure chat endpoint (`POST /api/v1/assistant/query`, Part 6.3).
 - [ ] Add request limits and logging.
 - [ ] Add API integration tests.
 
 ## Phase 11 — Frontend
 
 - [x] Milestone 1: demo-ready client (login, role display, secure chat, citations, restricted state, profile, themes, tests).
-- [ ] Switch the assistant client to the real `/api/v1/assistant/query` contract once Part 6 lands (remove the provisional types).
-- [ ] Show department once `/auth/me` exposes it; show document titles once retrieval returns them.
+- [x] Switch the assistant client to the real `/api/v1/assistant/query` contract (`query` field; `sources`, `unverified_source_numbers`; provisional types and the search fallback removed).
+- [x] Show document titles for retrieved sources (from `AssistantSource.document_title`).
+- [ ] Show department once `/auth/me` exposes it.
 
 - [ ] Scaffold React and TypeScript.
 - [ ] Add authentication and protected routes.
@@ -171,4 +181,4 @@
 - [x] Parts 1–5 and the demo dataset implemented and verified; full backend suite passes (168/168).
 - [x] Migration `7c3e9a1d5b20` upgrade/downgrade/re-upgrade verified on `rag_system_test`; `rag_system` upgraded with demo data intact.
 - [x] No RAG, LLM, citation, OCR, or frontend created.
-- [ ] Explicit user approval to begin Part 6.
+- [x] Explicit user approval to begin Part 6 (Part 6.1 approved and complete; Part 6.2 not started).

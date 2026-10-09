@@ -8,6 +8,7 @@ because it can echo request content.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
@@ -25,6 +26,14 @@ _ROLES = frozenset({"system", "user", "assistant"})
 
 class LLMProviderError(RuntimeError):
     """Raised when the LLM provider cannot produce a valid answer."""
+
+
+class LLMProviderTimeoutError(LLMProviderError):
+    """Raised when the provider does not answer within LLM_TIMEOUT_SECONDS."""
+
+
+class LLMProviderRateLimitError(LLMProviderError):
+    """Raised when the provider's rate limit is still in effect after one short wait."""
 
 
 class LLMConfigurationError(ValueError):
@@ -88,17 +97,52 @@ class OpenAICompatibleLLMProvider(LLMProvider):
         max_tokens: int | None = None,
     ) -> LLMResponse:
         _validate_messages(messages)
-        try:
-            response = await self._client.chat.completions.create(
-                model=self._model,
-                messages=[{"role": m.role, "content": m.content} for m in messages],
-                temperature=self._temperature if temperature is None else temperature,
-                max_tokens=self._max_tokens if max_tokens is None else max_tokens,
-            )
-        except Exception as exc:
-            logger.warning("LLM provider request failed error_type=%s", type(exc).__name__)
-            raise LLMProviderError("The language model request failed.") from exc
+        waited = False
+        while True:
+            try:
+                response = await self._client.chat.completions.create(
+                    model=self._model,
+                    messages=[{"role": m.role, "content": m.content} for m in messages],
+                    temperature=self._temperature if temperature is None else temperature,
+                    max_tokens=self._max_tokens if max_tokens is None else max_tokens,
+                )
+                break
+            except Exception as exc:
+                logger.warning("LLM provider request failed error_type=%s", type(exc).__name__)
+                if _is_timeout(exc):
+                    raise LLMProviderTimeoutError("The language model request timed out.") from exc
+                if _is_rate_limit(exc):
+                    # Per-minute token limits clear in seconds: wait once if the provider says how long.
+                    wait = _retry_after_seconds(exc)
+                    if not waited and wait is not None and wait <= settings.llm_rate_limit_max_wait_seconds:
+                        waited = True
+                        logger.info("LLM rate limited; waiting %.1fs before one retry", wait)
+                        await asyncio.sleep(wait)
+                        continue
+                    raise LLMProviderRateLimitError("The language model is rate limited.") from exc
+                raise LLMProviderError("The language model request failed.") from exc
         return _parse_response(response, self._model)
+
+
+def _is_timeout(exc: Exception) -> bool:
+    from openai import APITimeoutError
+
+    return isinstance(exc, (TimeoutError, APITimeoutError))
+
+
+def _is_rate_limit(exc: Exception) -> bool:
+    from openai import RateLimitError
+
+    return isinstance(exc, RateLimitError)
+
+
+def _retry_after_seconds(exc: Exception) -> float | None:
+    """The provider's own wait hint (Retry-After header, in seconds), if it sent a usable one."""
+    try:
+        value = float(exc.response.headers["retry-after"])  # type: ignore[attr-defined]
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    return value if 0 <= value < float("inf") else None
 
 
 def _validate_messages(messages: Sequence[ChatMessage]) -> None:

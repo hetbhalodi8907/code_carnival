@@ -65,10 +65,29 @@ describe("api client", () => {
     const leaky = new ApiError(503, "HTTP_ERROR", "Internal detail: embedding provider at 10.0.0.5");
     expect(toFriendlyError(leaky).title).toBe("Service temporarily unavailable");
     expect(JSON.stringify(toFriendlyError(leaky))).not.toContain("10.0.0.5");
-    expect(toFriendlyError(new ApiError(422, null, null)).title).toBe("Invalid request");
+    expect(toFriendlyError(new ApiError(422, null, null)).title).toBe("Question not accepted");
+    const limited = toFriendlyError(new ApiError(429, "HTTP_ERROR", "Rate limit: provider quota detail"));
+    expect(limited).toMatchObject({ title: "The assistant is busy", retryable: true });
+    expect(JSON.stringify(limited)).not.toContain("quota");
     expect(toFriendlyError(new ApiError(500, null, null)).title).toBe("Something went wrong");
     expect(toFriendlyError(new Error("boom")).title).toBe("Something went wrong");
-    expect(new ApiError(404, "HTTP_ERROR", "Not Found").isMissingRoute).toBe(true);
-    expect(new ApiError(404, "HTTP_ERROR", "The document does not exist.").isMissingRoute).toBe(false);
+  });
+
+  it("offers a retry only for temporary failures", () => {
+    const titles: Record<number, [string, boolean]> = {
+      0: ["Can't reach Nexora", true],
+      401: ["Session expired", false],
+      403: ["Access restricted", false],
+      422: ["Question not accepted", false],
+      500: ["Something went wrong", true],
+      502: ["The assistant couldn't answer", true],
+      503: ["Service temporarily unavailable", true],
+      504: ["The assistant timed out", true],
+    };
+    for (const [status, [title, retryable]] of Object.entries(titles)) {
+      const friendly = toFriendlyError(new ApiError(Number(status), "HTTP_ERROR", "server detail"));
+      expect([friendly.title, friendly.retryable]).toEqual([title, retryable]);
+      expect(friendly.message).not.toContain("server detail");
+    }
   });
 });

@@ -89,7 +89,7 @@ class VectorSearchApiTests(LiveDatabaseTestCase):
                 self.assertEqual(body["error"]["code"], "VALIDATION_ERROR")
 
     async def test_unconfigured_provider_returns_safe_503(self) -> None:
-        with patch.object(settings, "openai_api_key", None):
+        with patch.object(settings, "embedding_provider", "openai"), patch.object(settings, "openai_api_key", None):
             status, body = await self.post_json("/api/v1/search/vector", {"query": "valid"})
 
         self.assertEqual(status, 503)

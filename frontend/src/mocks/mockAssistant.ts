@@ -1,10 +1,10 @@
 /**
  * DEVELOPMENT-ONLY simulated assistant, enabled with VITE_USE_MOCK_API=true.
  *
- * It exists only to preview answer, citation and restricted states before the real
- * POST /api/v1/assistant/query endpoint exists. It is never part of a production
- * build (see config/env.ts) and is NOT a security mechanism: it imitates the server's
- * documented demo behaviour for the existing Nexora demo dataset, nothing more.
+ * It previews the answered, insufficient_context and no_authorized_context states of
+ * POST /api/v1/assistant/query without a backend that has embeddings. It is never part
+ * of a production build (see config/env.ts) and is NOT a security mechanism: it imitates
+ * the server's documented demo behaviour for the Nexora demo dataset, nothing more.
  */
 
 import type { CurrentUser } from "@/types/api";
@@ -16,7 +16,7 @@ interface MockTopic {
   allowedRoles: string[];
   allowedEmails?: string[];
   answer: string;
-  source: { title: string; page: number; excerpt: string };
+  source: { title: string; page: number };
 }
 
 const MANAGERS_AND_ALL = [
@@ -35,25 +35,23 @@ const TOPICS: MockTopic[] = [
     allowedEmails: ["rahul.gupta@nexora.example"],
     answer: "Rahul Gupta's revised annual CTC for FY 2025-26 is INR 6.2 lakh, effective 1 April 2025.",
     source: {
-      title: "Compensation_Statement_Rahul_Gupta.pdf",
+      title: "Compensation Statement FY 2025-26 - Rahul Gupta",
       page: 2,
-      excerpt: "Revised annual CTC for Rahul Gupta: INR 6.2 lakh, effective 1 April 2025.",
     },
   },
   {
     keywords: /ignore (all )?previous instructions|reveal (the )?confidential/i,
     allowedRoles: [],
     answer: "",
-    source: { title: "", page: 0, excerpt: "" },
+    source: { title: "", page: 0 },
   },
   {
     keywords: /\bhr\b|performance review|salary band|escalation/i,
     allowedRoles: ["HR_MANAGER", "SUPER_ADMIN"],
     answer: "The annual performance review cycle runs from 1 April to 31 March. Self-assessments open on 1 April and final ratings are communicated by 31 May.",
     source: {
-      title: "HR_Policy.pdf",
+      title: "Nexora Human Resources Policy",
       page: 2,
-      excerpt: "The annual performance review cycle runs from 1 April to 31 March.",
     },
   },
   {
@@ -61,9 +59,8 @@ const TOPICS: MockTopic[] = [
     allowedRoles: ["FINANCE_MANAGER", "SUPER_ADMIN"],
     answer: "The Finance Department Annual Budget for FY 2025-26 is INR 1.5 crore.",
     source: {
-      title: "Finance_Report.pdf",
+      title: "Nexora Finance Report FY 2025-26",
       page: 2,
-      excerpt: "Finance Department Annual Budget: INR 1.5 crore.",
     },
   },
   {
@@ -71,9 +68,8 @@ const TOPICS: MockTopic[] = [
     allowedRoles: ["ENGINEERING_MANAGER", "SUPER_ADMIN"],
     answer: "Every pull request to a production service requires at least two approving reviews; internal tools require one.",
     source: {
-      title: "Engineering_Guidelines.pdf",
+      title: "Nexora Engineering Guidelines",
       page: 2,
-      excerpt: "Every pull request to a production service requires at least two approving reviews.",
     },
   },
   {
@@ -81,9 +77,8 @@ const TOPICS: MockTopic[] = [
     allowedRoles: ["SECURITY_MANAGER", "SUPER_ADMIN"],
     answer: "Multi-factor authentication is mandatory for every account. Privileged, finance and security accounts must use FIDO2 hardware security keys.",
     source: {
-      title: "Security_Policy.pdf",
+      title: "Nexora Information Security Policy",
       page: 2,
-      excerpt: "Multi-factor authentication is mandatory for every account that accesses Nexora systems.",
     },
   },
   {
@@ -91,9 +86,8 @@ const TOPICS: MockTopic[] = [
     allowedRoles: MANAGERS_AND_ALL,
     answer: "Employees receive 18 days of paid annual leave per calendar year, accrued at 1.5 days per month.",
     source: {
-      title: "Employee_Handbook.pdf",
+      title: "Nexora Employee Handbook",
       page: 2,
-      excerpt: "Employees receive 18 days of paid annual leave per calendar year.",
     },
   },
 ];
@@ -104,12 +98,12 @@ const OWN_STATEMENTS: Record<string, { name: string; ctc: string; title: string 
   "kabir.sethi@nexora.example": {
     name: "Kabir Sethi",
     ctc: "11.4",
-    title: "Compensation_Statement_Kabir_Sethi.pdf",
+    title: "Compensation Statement FY 2025-26 - Kabir Sethi",
   },
   "rahul.gupta@nexora.example": {
     name: "Rahul Gupta",
     ctc: "6.2",
-    title: "Compensation_Statement_Rahul_Gupta.pdf",
+    title: "Compensation Statement FY 2025-26 - Rahul Gupta",
   },
 };
 
@@ -123,6 +117,9 @@ function wait(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** The server's fixed messages (backend/app/services/rag/generation.py). */
+const NO_AUTHORIZED_CONTEXT = "I couldn't find any information you're authorized to access that answers this question.";
+
 export async function mockAskAssistant(
   question: string,
   user: CurrentUser,
@@ -131,44 +128,36 @@ export async function mockAskAssistant(
   await wait(900, signal);
   if (MY_COMPENSATION.test(question)) {
     const own = OWN_STATEMENTS[user.email];
-    if (!own) return { kind: "restricted" };
+    if (!own) return { kind: "no_authorized_context", message: NO_AUTHORIZED_CONTEXT };
     return {
-      kind: "answer",
-      answer: `Your revised annual CTC for FY 2025-26 is INR ${own.ctc} lakh, effective 1 April 2025.`,
-      citations: [
-        {
-          id: `mock-${own.title}-2`,
-          title: own.title,
-          pageNumber: 2,
-          similarity: 0.93,
-          excerpt: `Revised annual CTC for ${own.name}: INR ${own.ctc} lakh, effective 1 April 2025.`,
-        },
-      ],
+      kind: "answered",
+      answer: `Your revised annual CTC for FY 2025-26 is INR ${own.ctc} lakh, effective 1 April 2025 [S1].`,
+      sources: [{ id: `mock-${own.title}-2`, title: own.title, pageNumber: 2, similarity: 0.93 }],
+      unverifiedSourceNumbers: [1],
     };
   }
   const topic = TOPICS.find((candidate) => candidate.keywords.test(question));
   if (!topic) {
     return {
-      kind: "answer",
-      answer: "Mock mode only covers the sample demo questions. Disable VITE_USE_MOCK_API to use the real backend.",
-      citations: [],
+      kind: "insufficient_context",
+      message: "Mock mode only covers the sample demo questions. Disable VITE_USE_MOCK_API to use the real backend.",
     };
   }
   const allowed =
     user.roles.some((role) => topic.allowedRoles.includes(role)) ||
     (topic.allowedEmails ?? []).includes(user.email);
-  if (!allowed || !topic.answer) return { kind: "restricted" };
+  if (!allowed || !topic.answer) return { kind: "no_authorized_context", message: NO_AUTHORIZED_CONTEXT };
   return {
-    kind: "answer",
-    answer: topic.answer,
-    citations: [
+    kind: "answered",
+    answer: `${topic.answer} [S1]`,
+    sources: [
       {
         id: `mock-${topic.source.title}-${topic.source.page}`,
         title: topic.source.title,
         pageNumber: topic.source.page,
         similarity: 0.91,
-        excerpt: topic.source.excerpt,
       },
     ],
+    unverifiedSourceNumbers: [1],
   };
 }

@@ -1,60 +1,52 @@
 import { ChevronDown, FileText } from "lucide-react";
-import { useId, useState } from "react";
 
-import { citationLabel, formatSimilarity } from "@/lib/format";
+import { formatSimilarity, sourceLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { Citation } from "@/types/assistant";
+import type { RetrievedSource } from "@/types/assistant";
 
-function CitationMeta({ citation }: { citation: Citation }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums">
-      {citation.pageNumber !== null ? <span>Page {citation.pageNumber}</span> : null}
-      {citation.similarity !== null ? <span>Similarity {formatSimilarity(citation.similarity)}</span> : null}
-    </div>
-  );
+interface SourceCardProps {
+  source: RetrievedSource;
+  expanded: boolean;
+  onToggle: () => void;
+  detailId: string;
 }
 
-/** Expanded view of one source: title, page, similarity and the passage text. */
-export function SourceCard({ citation, defaultExpanded = false }: { citation: Citation; defaultExpanded?: boolean }) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const passageId = useId();
-  const excerpt = citation.excerpt?.trim();
-  // Only long passages get a show-more toggle.
-  const collapsible = (excerpt?.length ?? 0) > 220 || (excerpt?.split("\n").length ?? 0) > 3;
-
+/** One retrieved source: document title and page, with page and similarity expanded, exactly as the server sent them. */
+export function SourceCard({ source, expanded, onToggle, detailId }: SourceCardProps) {
   return (
-    <div className="animate-fade-in rounded-lg border border-border bg-background/50 p-3.5" data-testid="source-card">
-      <div className="flex items-start gap-2.5">
-        <FileText className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{citationLabel(citation)}</div>
-          <CitationMeta citation={citation} />
-        </div>
-      </div>
-      {excerpt ? (
-        <>
-          <p
-            id={passageId}
-            className={cn(
-              "mt-2.5 whitespace-pre-line border-l-2 border-primary/40 pl-3 text-[13px] leading-relaxed text-muted-foreground",
-              collapsible && !expanded && "line-clamp-3",
-            )}
-          >
-            {excerpt}
-          </p>
-          {collapsible ? (
-            <button
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-              aria-expanded={expanded}
-              aria-controls={passageId}
-              className="mt-2 inline-flex items-center gap-1 rounded text-xs font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {expanded ? "Show less" : "Show full passage"}
-              <ChevronDown className={cn("size-3.5 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
-            </button>
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={detailId}
+        className="flex w-full items-start gap-3 px-3.5 py-3 text-left hover:bg-surface-2"
+      >
+        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-[7px] border border-border bg-muted text-muted-foreground">
+          <FileText className="size-[18px]" aria-hidden="true" />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-[13.5px] font-semibold">{sourceLabel(source)}</span>
+          {source.pageNumber !== null ? (
+            <span className="font-mono text-[11.5px] text-subtle">p. {source.pageNumber}</span>
           ) : null}
-        </>
+        </span>
+        <ChevronDown
+          className={cn("mt-1 size-4 shrink-0 text-subtle transition-transform", expanded && "rotate-180")}
+          aria-hidden="true"
+        />
+      </button>
+      {expanded ? (
+        <div
+          id={detailId}
+          data-testid="source-card"
+          className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border bg-surface-2 px-3.5 py-3 text-[13px] tabular-nums"
+        >
+          {source.pageNumber !== null ? <span>Page {source.pageNumber}</span> : null}
+          <span title="Cosine similarity between the question and this passage (higher is closer). Not a confidence score.">
+            Similarity {formatSimilarity(source.similarity)}
+          </span>
+        </div>
       ) : null}
     </div>
   );

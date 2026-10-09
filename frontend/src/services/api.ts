@@ -21,11 +21,6 @@ export class ApiError extends Error {
     this.code = code;
     this.serverMessage = serverMessage;
   }
-
-  /** FastAPI's default 404 for a route that does not exist (not a domain-level 404). */
-  get isMissingRoute(): boolean {
-    return this.status === 404 && this.serverMessage === "Not Found";
-  }
 }
 
 type UnauthorizedHandler = () => void;
@@ -76,7 +71,9 @@ export async function apiRequest<T>(
   { body, auth = true, signal }: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // FormData (file uploads) must not get a Content-Type: the browser adds it with the multipart boundary.
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
   if (auth) {
     const token = getAccessToken();
     if (!token) throw sessionExpired();
@@ -88,7 +85,7 @@ export async function apiRequest<T>(
     response = await fetch(`${API_BASE_URL}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
       signal,
     });
   } catch (error) {
@@ -117,6 +114,8 @@ export const api = {
 export interface FriendlyError {
   title: string;
   message: string;
+  /** Whether sending the same request again can succeed (temporary failures only). */
+  retryable: boolean;
 }
 
 /** Map any failure to calm, non-technical copy. Raw server payloads are never shown. */
@@ -124,22 +123,56 @@ export function toFriendlyError(error: unknown): FriendlyError {
   const status = error instanceof ApiError ? error.status : -1;
   switch (status) {
     case 0:
-      return { title: "Can't reach Nexora", message: "Check your connection and that the Nexora server is running." };
+      return {
+        title: "Can't reach Nexora",
+        message: "Check your connection and that the Nexora server is running.",
+        retryable: true,
+      };
     case 401:
-      return { title: "Session expired", message: "Please sign in again to continue." };
+      return { title: "Session expired", message: "Please sign in again to continue.", retryable: false };
     case 403:
-      return { title: "Access restricted", message: "Your account isn't permitted to perform this action." };
+      return {
+        title: "Access restricted",
+        message: "Your account isn't permitted to perform this action.",
+        retryable: false,
+      };
     case 404:
-      return { title: "Not available yet", message: "This capability isn't available on the server yet." };
+      return { title: "Not available", message: "This capability isn't available on the server.", retryable: false };
     case 422:
-      return { title: "Invalid request", message: "Please check your question and try again." };
+      return {
+        title: "Question not accepted",
+        message: "The question couldn't be processed. Please rephrase it and try again.",
+        retryable: false,
+      };
+    case 429:
+      return {
+        title: "The assistant is busy",
+        message: "The AI service is handling too many requests right now. Please wait a moment and try again.",
+        retryable: true,
+      };
     case 502:
+      return {
+        title: "The assistant couldn't answer",
+        message: "The AI service returned an error or an incomplete answer. Please try again.",
+        retryable: true,
+      };
     case 503:
       return {
         title: "Service temporarily unavailable",
         message: "The AI service can't answer right now. Please try again shortly.",
+        retryable: true,
+      };
+    case 504:
+      return {
+        title: "The assistant timed out",
+        message: "The AI service didn't respond in time. Please try again.",
+        retryable: true,
       };
     default:
-      return { title: "Something went wrong", message: "An unexpected error occurred. Please try again." };
+      return {
+        title: "Something went wrong",
+        message: "An unexpected error occurred. Please try again.",
+        retryable: true,
+      };
   }
 }

@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router";
 
+import { PageStatus } from "@/components/feedback/PageStatus";
 import { useAuth } from "@/context/useAuth";
 
 /**
@@ -10,13 +11,7 @@ export function ProtectedRoute() {
   const { status } = useAuth();
   const location = useLocation();
 
-  if (status === "loading") {
-    return (
-      <div className="grid h-full place-items-center" role="status" aria-live="polite">
-        <span className="text-sm text-muted-foreground">Restoring your secure session…</span>
-      </div>
-    );
-  }
+  if (status === "loading") return <PageStatus>Restoring your secure session…</PageStatus>;
   if (status !== "authenticated") {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }

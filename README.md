@@ -34,6 +34,12 @@ A deterministic **synthetic demo dataset** for the fictional company Nexora Tech
 
 Part 5 (authentication, RBAC, document authorization and retrieval-level security) is complete. Users sign in with email and password (Argon2id hashes) and receive a short-lived JWT. Permissions come from the database. **Vector search applies document authorization inside the SQL query, before ranking and `LIMIT`**, so unauthorized chunks never reach the application. The full backend suite (168 tests) passes against the `rag_system_test` database.
 
+Part 6.1 (query processing and secure context construction) is complete. A validated question goes to the existing authorization-aware vector search as the authenticated user. Only the authorized results become structured context items, kept in ranking order with their source metadata. The full backend suite (218 tests) passed against `rag_system_test`.
+
+Part 6.2 (grounded LLM generation) is complete as an internal service. Using the existing Groq provider, it answers only from the Part 6.1 context, never calls the model without usable context, and validates the model's output. Citations remain unverified until Part 7. The full backend suite (242 tests) passed against `rag_system_test`.
+
+Part 6.3 (authenticated assistant query API) is complete: `POST /api/v1/assistant/query` chains the authenticated user, Part 6.1 context and Part 6.2 generation. The full backend suite (266 tests) passes against `rag_system_test`.
+
 ## Documentation map
 
 - [Project requirements](docs/PROJECT_REQUIREMENTS.md)
@@ -83,11 +89,25 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_system_te
 
 > Shell blocks in these docs contain no `# comments`: macOS zsh does not treat `#` as a comment when you paste at the prompt, so a trailing note is passed to the command as extra arguments.
 
-Embedding generation and vector search need `OPENAI_API_KEY`. Without it, those endpoints return HTTP 503.
+Embeddings are generated locally (see [Local embeddings](#local-embeddings)); no API key is needed.
+
+## Local embeddings
+
+Document and query embeddings use the local `sentence-transformers/all-MiniLM-L6-v2` model (384 dimensions, CPU, L2-normalized) through `SentenceTransformerEmbeddingProvider` in `app/services/embeddings/provider.py`. No OpenAI key is required. The model downloads once (about 90 MB) to `~/.cache/huggingface`, then works offline (`HF_HUB_OFFLINE=1`). Documents and queries always use the same configured model: retrieval filters on `embedding_model`, and migration `a1d4c7e9f3b2` resized the column to `vector(384)`, clearing any vectors from the previous 1536-dimension model.
+
+Settings (defaults shown): `EMBEDDING_PROVIDER=sentence-transformers`, `EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2`, `EMBEDDING_DIMENSION=384`. `EMBEDDING_PROVIDER=openai` remains available with `OPENAI_API_KEY` and a `text-embedding-3` model requested at 384 dimensions. The model reads at most 256 word pieces per chunk, so text beyond that in a long chunk does not affect its embedding (it still reaches the LLM as context).
+
+From `backend/`, migrate and then embed the demo chunks. The embedding step is idempotent: a rerun skips chunks already embedded with the configured model.
+
+```bash
+export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_system
+.venv/bin/alembic upgrade head
+.venv/bin/python scripts/generate_demo_dataset.py --with-embeddings
+```
 
 ## Frontend (demo-ready)
 
-`frontend/` contains the React + TypeScript + Tailwind + shadcn/ui client: login, a protected app shell with the signed-in user's role, the secure AI chat with citation and access-restricted states, a profile page, and dark/light themes. It consumes only the existing backend APIs and makes no access decisions. Run it with `cd frontend && npm install && npm run dev` (it proxies `/api` to `localhost:8000`). See [frontend/README.md](frontend/README.md) and [frontend/DESIGN_SYSTEM.md](frontend/DESIGN_SYSTEM.md).
+`frontend/` contains the React + TypeScript + Tailwind + shadcn/ui client: login, a protected app shell with the signed-in user's role, the secure AI chat (grounded answers with the sources retrieved for them, insufficient-context and no-authorized-context states, and safe errors), a profile page, and dark/light themes. It consumes only the existing backend APIs and makes no access decisions. Run it with `cd frontend && npm install && npm run dev` (it proxies `/api` to `localhost:8000`). See [frontend/README.md](frontend/README.md) and [frontend/DESIGN_SYSTEM.md](frontend/DESIGN_SYSTEM.md).
 
 ## LLM provider (Groq)
 
@@ -97,7 +117,111 @@ Answer generation will use Groq through its OpenAI-compatible API (the existing 
 .venv/bin/python scripts/check_llm_provider.py
 ```
 
-Only the provider layer exists (`app/services/llm/`). Nothing calls it yet; the RAG pipeline and endpoint are Part 6. **Groq offers no embedding models**, so vector search still needs `OPENAI_API_KEY` (or another embedding provider) before it can return results.
+The provider layer is `app/services/llm/`. Its only caller is the Part 6.2 generation service below, which `POST /api/v1/assistant/query` exposes. **Groq offers no embedding models**, so embeddings come from the local model (see [Local embeddings](#local-embeddings)).
+
+## Secure RAG context (Part 6.1)
+
+`app/services/rag/context.py` turns a question into structured, authorized context for answer generation. It is an internal service; there is no new HTTP endpoint.
+
+1. **Validate** with `RagQuery` (`app/schemas/rag.py`). Surrounding whitespace is trimmed, and empty, whitespace-only and over-2,000-character questions are rejected. `top_k` is a strict integer from 1 to 20, the same bounds as vector search. Unknown fields such as `user_id` or `role` are rejected.
+2. **Authorize.** The caller passes the `AuthenticatedUser` from the JWT dependency, and users without `documents:read` are refused before any retrieval.
+3. **Retrieve** through the existing `VectorSearchService` as that user. Authorization stays inside its SQL, before `ORDER BY`/`LIMIT`. The builder has no database session of its own, so it cannot run another query or filter results in Python. Document titles come from the same SQL statement.
+4. **Build** one `ContextItem` per authorized result, in ranking order. Each item carries the rank, chunk ID, document ID and title, chunk index, page number, source locator, verbatim content, and distance and similarity. Storage paths, credentials and access-control data are never included. `render()` wraps each source in BEGIN/END lines that carry a digest of the whole context, so document text cannot fake a source boundary.
+
+Zero authorized results give `status="no_authorized_context"` with no items or sources. Embedding-provider and database failures raise errors; they never turn into an empty context. `RAG_MAX_CONTEXT_CHARACTERS` (default 32,000) caps the total chunk text. Lower-ranked results beyond it are dropped whole and counted, never cut mid-chunk. Retrieved text, including the deliberate prompt-injection comment in `Procurement_Report.pdf`, is treated as data. Logs record counts, the user ID and the duration, never the question or the content.
+
+On `rag_system` all 45 demo chunks are embedded with the local model, so live context works without any API key. Tests use the offline lexical embedding provider on `rag_system_test`.
+
+## Grounded generation (Part 6.2)
+
+`app/services/rag/generation.py` turns a `RagQuery` and its Part 6.1 `RetrievalContext` into an answer through the existing Groq provider (`create_answer_generator()` wraps `create_llm_provider()`). `POST /api/v1/assistant/query` (Part 6.3, below) is its only HTTP entry point.
+
+```
+RagQuery + RetrievalContext + AuthenticatedUser
+  -> check the context belongs to this user and question
+  -> no usable context? return the fixed "no_authorized_context" answer (no LLM call)
+  -> two messages: system (fixed rules) + user (question + delimited sources)
+  -> one provider call (configured model, temperature, max tokens, timeout; no tools)
+  -> validate the output -> GenerationResult
+```
+
+- **Grounding.** The system message holds only fixed rules:
+  - answer only from the sources, and never invent facts, figures, names, pages or sources;
+  - say what the sources do not cover, and label any inference;
+  - claim no other access, use no tools, and give the final answer without reasoning.
+
+  If nothing in the sources answers the question, the model replies `INSUFFICIENT_CONTEXT`. The service turns that into a fixed `insufficient_context` answer.
+- **Prompt injection.** Retrieved text goes only into the user message, inside the Part 6.1 source boundaries that document text cannot forge. The system message says sources are untrusted data and never instructions. A question that contains the boundary token is refused before any call. This reduces prompt-injection risk; it cannot rule it out.
+- **No context, no call.** An empty context, or one whose chunks are all blank, returns the fixed `no_authorized_context` answer without contacting the provider. A missing or malformed context, a context built for another user or question, or duplicate source numbers raise an `invalid_context` error, again without a call.
+- **Output validation.** The model's output is rejected (`RagGenerationError`) when it is not an `LLMResponse`, is empty, was cut off (`finish_reason="length"`), ended for any reason other than `stop`, or reproduces the source-boundary token. Provider failures become `provider_error` or `provider_timeout`. Errors carry fixed messages and no chained provider exception.
+- **Citations are unverified.** The model is asked to cite `[S<n>]` source numbers. `GenerationResult.unverified_source_numbers` records them as proposals only, and `GenerationResult.context` keeps the authoritative chunks for Part 7 citation validation.
+- **Data access and logs.** The generator runs no database query, search or file read; tests confirm it issues zero SQL statements. Logs hold status, user ID, model, token counts and duration, never the question, sources, prompt or answer.
+
+Configuration: `GROQ_API_KEY` in the git-ignored `backend/.env`; `LLM_MODEL`, `LLM_TEMPERATURE`, `LLM_MAX_OUTPUT_TOKENS` and `LLM_TIMEOUT_SECONDS` are reused unchanged. Live answers use the locally embedded Part 6.1 context. The generation tests use fake providers and never call Groq. Run them from `backend/`:
+
+```bash
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_system_test \
+  .venv/bin/python -m unittest discover -s tests -p "test_rag_generation.py"
+```
+
+## Assistant query API (Part 6.3)
+
+`POST /api/v1/assistant/query` answers a question from documents the caller may read. It needs a bearer token (`Authorization: Bearer <token>` from `POST /api/v1/auth/login`) and the `documents:read` permission.
+
+Request (the `RagQuery` schema): `query` is 1–2,000 characters after trimming, and `top_k` is a strict integer from 1 to 20 (default 5). Any other field, such as `user_id`, `role`, `permissions` or `department`, is rejected with 422.
+
+```json
+{"query": "What is the Finance department budget?", "top_k": 5}
+```
+
+Response (`AssistantQueryResponse`):
+
+```json
+{
+  "status": "answered",
+  "answer": "The Finance department budget for FY 2025-26 is INR 1.5 crore [S1].",
+  "request_id": "6f1c…",
+  "sources": [
+    {"source_number": 1, "document_id": "…", "document_title": "Nexora Finance Report FY 2025-26",
+     "chunk_id": "…", "page_number": 2, "source_locator": "page:2", "similarity": 0.82}
+  ],
+  "unverified_source_numbers": [1]
+}
+```
+
+| `status` | Meaning | LLM called |
+|---|---|---|
+| `answered` | Grounded answer; `sources` lists the authorized passages the model was given | yes |
+| `insufficient_context` | The authorized passages do not answer the question; fixed message, no sources | yes |
+| `no_authorized_context` | No usable authorized passage; fixed message, no sources | **no** |
+
+How a request flows:
+1. FastAPI checks the token, the account's active status and `documents:read` before the route runs. Missing or invalid tokens get 401, a missing permission gets 403, and an invalid body gets 422; none of these reach retrieval or generation.
+2. The route checks that the language model and embedding provider are configured, before any paid embedding call.
+3. `ContextBuilder` retrieves as the token's user, with authorization in SQL before ranking and `LIMIT`.
+4. `AnswerGenerator` receives that query, context and user, and enforces its ownership and consistency checks.
+
+The user always comes from the token: identity fields in the body, query string or headers are rejected or ignored.
+
+`sources` come from the server's retrieved context, never from the model's answer, and contain metadata only (no chunk text). They are the evidence the model was given, **not validated citations**. `unverified_source_numbers` are the model's own `[S<n>]` references, which may be wrong or point at no source. Citation validation is Part 7.
+
+Errors use the standard `{"error": {"code", "message", "request_id"}}` envelope with fixed messages. They never include provider text, prompts, retrieved text or stack traces.
+
+| Status | Cause |
+|---|---|
+| 401 / 403 | Missing, invalid or expired token, or an inactive account / no `documents:read` |
+| 422 | Invalid body, or a question that cannot be processed safely |
+| 500 | Inconsistent retrieval context, or an unexpected error |
+| 502 | Embedding provider failed; the LLM failed or returned an empty, incomplete or invalid answer |
+| 503 | Embedding provider or LLM not configured; vector search unavailable |
+| 504 | LLM timeout |
+
+On the demo database the endpoint answers live: local embeddings for retrieval, Groq for generation. Run the API tests from `backend/` (fake LLM, offline embeddings, test database):
+
+```bash
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_system_test \
+  .venv/bin/python -m unittest discover -s tests -p "test_assistant_api.py"
+```
 
 ## Authentication and authorization
 
@@ -126,6 +250,7 @@ The inactive demo user (`farhan.qureshi@nexora.example`) can never sign in. Send
 | `POST /api/v1/auth/login` | public; returns `{access_token, token_type, expires_in}` |
 | `GET /api/v1/auth/me` | authenticated; identity, roles and permissions from the database |
 | `POST /api/v1/search/vector` | `documents:read`; results limited to the caller's authorized documents |
+| `POST /api/v1/assistant/query` | `documents:read`; answers only from the caller's authorized documents |
 | `POST /api/v1/documents/preview`, `POST /api/v1/documents/ingest` | `documents:write` (SUPER_ADMIN in the demo dataset); the uploader receives an explicit grant to the new document |
 | `POST /api/v1/embeddings/documents/{id}` | `documents:write` **and** access to that document; otherwise 404, the same as a missing document |
 
@@ -169,18 +294,18 @@ npm install
 npm run dev
 ```
 
-**Retrieval needs embeddings.** Groq has no embeddings API, and the demo chunks are only embedded once an embedding provider is configured. Until then, questions return "Service temporarily unavailable"; logins, roles and permissions work regardless. With an OpenAI key in `backend/.env` (`OPENAI_API_KEY=...`), run `.venv/bin/python scripts/generate_demo_dataset.py --with-embeddings` once (about 9,000 tokens). Answers appear as **authorized passages**, because LLM answer generation is Part 6.
+**Requirements.** `GROQ_API_KEY` in `backend/.env`, and the demo chunks embedded locally once (`alembic upgrade head`, then `scripts/generate_demo_dataset.py --with-embeddings`; see [Local embeddings](#local-embeddings)). No OpenAI key is needed. Each question gets an answer generated by Groq from the authorized passages only, shown with the sources retrieved for it. Those sources are not yet verified citations (Part 7).
 
 ### Demo script
 
 1. **Finance Manager:** click the card, then **Log in as Finance Manager**. Point out the sidebar: name, email, role, *Authenticated*, permissions from the server.
-2. Ask *"What is the Finance department budget?"*: the Finance Report passage (INR 1.5 crore) is returned.
-3. Ask *"What are the confidential HR salary bands and the HR escalation process?"*: every passage is labelled `CONFIDENTIAL FINANCE` or `INTERNAL`, and nothing comes from the HR policy, because the server filters it inside the SQL query. **Log out.**
-4. **Employee (Kabir Sethi):** ask *"What is my compensation statement and revised annual CTC?"*: his own statement is returned (INR 11.4 lakh).
-5. Ask *"What is Rahul Gupta's compensation statement and revised annual CTC?"*: only `PUBLIC`/`INTERNAL` passages or his own statement come back, never Rahul's. **Log out.**
-6. **HR Manager:** ask *"What are the HR salary bands?"*: `CONFIDENTIAL HR` passages are returned. **Log out.**
+2. Ask *"What is the Finance department budget?"*: the answer gives INR 1.5 crore, and **Sources retrieved for this answer** lists the Finance Report.
+3. Ask *"What are the confidential HR salary bands and the HR escalation process?"*: the HR Policy never appears in the answer or its sources, because the server filters it inside the SQL query. Expect "Not enough information", or an answer drawn only from documents this role can read. **Log out.**
+4. **Employee (Kabir Sethi):** ask *"What is my compensation statement and revised annual CTC?"*: the answer comes from his own statement (INR 11.4 lakh).
+5. Ask *"What is Rahul Gupta's compensation statement and revised annual CTC?"*: Rahul's statement is never a source; expect "Not enough information" or an answer from Kabir's own documents. **Log out.**
+6. **HR Manager:** ask *"What are the HR salary bands?"*: the answer comes from the HR Policy, which is listed as a source. **Log out.**
 7. Optional: **CEO / Super Admin** sees both Finance and HR, through explicit grants on each document, not a bypass.
 
 ## Important scope boundary
 
-This repository contains documentation, project control, the FastAPI backend foundation, the database schema, PDF ingestion, pgvector embeddings, a synthetic (fictional) demo dataset, authentication, RBAC, document authorization and authorization-aware vector retrieval. It intentionally does not contain real company data, RAG, LLM calls, citations, OCR, an advanced frontend (beyond the basic demo client), or later-phase implementation.
+This repository contains documentation, project control, the FastAPI backend foundation, the database schema, PDF ingestion, pgvector embeddings, a synthetic (fictional) demo dataset, authentication, RBAC, document authorization, authorization-aware vector retrieval, secure RAG context construction, grounded generation and the authenticated assistant query API. It intentionally does not contain real company data, citation validation, OCR, an advanced frontend (beyond the basic demo client), or later-phase implementation.

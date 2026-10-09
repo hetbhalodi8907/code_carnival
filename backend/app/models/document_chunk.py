@@ -12,9 +12,10 @@ from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:
     from app.models.document import Document
 
-# The pgvector column dimension is fixed by the Alembic migration. The configured
-# EMBEDDING_DIMENSION must match it; a different model requires a new migration.
-EMBEDDING_VECTOR_DIMENSION = 1536
+# The pgvector column dimension is fixed by the Alembic migration (384 since
+# a1d4c7e9f3b2, for sentence-transformers/all-MiniLM-L6-v2). The configured
+# EMBEDDING_DIMENSION must match it; a different dimension requires a new migration.
+EMBEDDING_VECTOR_DIMENSION = 384
 
 
 class DocumentChunk(Base, UUIDPrimaryKeyMixin, TimestampMixin):

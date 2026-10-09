@@ -22,14 +22,20 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     max_pdf_size_mb: int = 25
+    # Image (OCR) uploads.
+    max_image_size_mb: int = Field(default=10, ge=1)
+    max_image_pixels: int = Field(default=25_000_000, ge=1)
+    ocr_min_confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     chunk_size: int = 4000
     chunk_overlap: int = 200
     document_storage_path: str = "data/documents"
 
-    embedding_provider: str = "openai"
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimension: int = Field(default=1536, ge=1)
+    # Local embeddings by default: no API key, and no network after the first model download.
+    embedding_provider: str = "sentence-transformers"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_dimension: int = Field(default=384, ge=1)
     embedding_batch_size: int = Field(default=100, ge=1)
+    # Only for EMBEDDING_PROVIDER=openai.
     openai_api_key: str | None = None
 
     # Answer-generation LLM (OpenAI-compatible chat API). Groq has no embeddings API,
@@ -41,6 +47,12 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     llm_max_output_tokens: int = Field(default=1024, ge=1, le=8192)
     llm_timeout_seconds: float = Field(default=30.0, gt=0.0, le=120.0)
+    # A rate-limited call waits once for the provider's Retry-After if it is at most this long.
+    llm_rate_limit_max_wait_seconds: float = Field(default=45.0, ge=0.0, le=120.0)
+
+    # RAG context budget: total characters of retrieved chunk text per context. Whole
+    # lower-ranked items beyond it are left out (and counted), never cut mid-item.
+    rag_max_context_characters: int = Field(default=32_000, ge=1_000)
 
     jwt_secret_key: SecretStr | None = None
     jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"

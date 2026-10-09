@@ -72,7 +72,7 @@ chunks
   token_count INTEGER
   embedding_model VARCHAR
   embedding_version VARCHAR
-  embedding VECTOR(1536) NULL
+  embedding VECTOR(384) NULL
   created_at TIMESTAMPTZ
   updated_at TIMESTAMPTZ
 

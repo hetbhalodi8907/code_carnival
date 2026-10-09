@@ -24,31 +24,6 @@ export interface CurrentUser {
   permissions: string[];
 }
 
-/** POST /api/v1/search/vector — results are already restricted to the caller's authorized documents. */
-export interface VectorSearchRequest {
-  query: string;
-  top_k?: number;
-}
-
-export interface VectorSearchResult {
-  chunk_id: string;
-  document_id: string;
-  chunk_index: number;
-  page_number: number | null;
-  source_locator: string | null;
-  content: string;
-  distance: number;
-  similarity: number;
-}
-
-export interface VectorSearchResponse {
-  query: string;
-  top_k: number;
-  distance_metric: "cosine";
-  embedding_model: string;
-  results: VectorSearchResult[];
-}
-
 /** The backend's global error envelope (app/core/exceptions.py). */
 export interface ApiErrorBody {
   error: {
@@ -59,26 +34,81 @@ export interface ApiErrorBody {
   };
 }
 
-/*
- * PROVISIONAL — POST /api/v1/assistant/query does NOT exist yet (backend Part 6).
- * This is the shape the UI is prepared to render; align it with the real contract
- * when Part 6 is implemented. Until then the client falls back to /search/vector.
+/**
+ * POST /api/v1/assistant/query — the backend's RagQuery (backend/app/schemas/rag.py).
+ * Unknown fields are rejected with 422; identity always comes from the bearer token.
  */
 export interface AssistantQueryRequest {
-  question: string;
+  /** 1–2,000 characters after trimming. */
+  query: string;
+  /** Integer from 1 to 20; the server defaults to 5. */
+  top_k?: number;
 }
 
-export interface AssistantCitationDto {
+export type AssistantStatus = "answered" | "insufficient_context" | "no_authorized_context";
+
+/** An authorized passage the server gave the model: server metadata, not a validated citation. */
+export interface AssistantSource {
+  source_number: number;
   document_id: string;
   document_title: string;
-  page_number: number | null;
   chunk_id: string;
-  similarity?: number | null;
-  excerpt?: string | null;
+  page_number: number | null;
+  source_locator: string | null;
+  /** Cosine similarity of the passage to the question; not a confidence score. */
+  similarity: number;
 }
 
 export interface AssistantQueryResponse {
-  status: "answered" | "no_authorized_context";
-  answer: string | null;
-  citations: AssistantCitationDto[];
+  status: AssistantStatus;
+  /** The answer, or the server's fixed message when there is none. */
+  answer: string;
+  request_id: string;
+  /** Empty unless status is "answered". */
+  sources: AssistantSource[];
+  /** The model's own [S<n>] references. UNVERIFIED until citation validation (backend Part 7). */
+  unverified_source_numbers: number[];
+}
+
+/**
+ * POST /api/v1/documents/ingest (201): the PDF was validated, extracted, chunked and stored,
+ * and the server then tried to embed it. Only embedding_status "completed" means searchable.
+ */
+export interface DocumentIngestionResponse {
+  document_id: string;
+  filename: string;
+  source_type: string;
+  source_path: string;
+  page_count: number;
+  chunk_count: number;
+  /** "processed" means stored and chunked; it does not mean embedded or searchable. */
+  status: string;
+  /** "completed", "failed" or "not_configured". Absent or null from a server that did not report it. */
+  embedding_status?: string | null;
+  /** The model that embedded the chunks; set when embedding_status is "completed". */
+  embedding_model?: string | null;
+}
+
+/** POST /api/v1/embeddings/documents/{document_id} (200): chunks were embedded, so the document is searchable. */
+export interface EmbeddingStorageResponse {
+  document_id: string;
+  chunks_processed: number;
+  embeddings_created: number;
+  embedding_model: string;
+  status: string;
+}
+
+/** POST /api/v1/documents/ingest-image (201): the image was validated, read by OCR, chunked, stored and embedded. */
+export interface ImageIngestionResponse {
+  document_id: string;
+  filename: string;
+  source_type: string;
+  source_path: string;
+  chunk_count: number;
+  ocr_line_count: number;
+  /** The OCR engine's mean line confidence, 0 to 1. Not a measure of whether the text is correct. */
+  ocr_mean_confidence: number;
+  /** "completed", "failed" or "not_configured". Only "completed" means the text is searchable. */
+  embedding_status: string;
+  status: string;
 }

@@ -1,18 +1,19 @@
-/** UI-level model of an assistant reply, independent of which backend endpoint produced it. */
+/** UI-level model of an assistant reply, adapted from POST /api/v1/assistant/query. */
 
-export interface Citation {
+/** An authorized passage the server retrieved and gave the model. Not a verified citation. */
+export interface RetrievedSource {
+  /** The chunk ID. */
   id: string;
-  /** Null when the backend does not return a document title (vector search). */
-  title: string | null;
+  title: string;
   pageNumber: number | null;
-  similarity: number | null;
-  excerpt: string | null;
+  /** Cosine similarity to the question; not a confidence score. */
+  similarity: number;
 }
 
 export type AssistantResult =
-  /** A generated answer with the sources it is grounded in. */
-  | { kind: "answer"; answer: string; citations: Citation[] }
-  /** Retrieval only: authorized passages, no generated answer (answer generation not enabled). */
-  | { kind: "passages"; passages: Citation[] }
-  /** The server found nothing this user is authorized to see for the question. */
-  | { kind: "restricted" };
+  /** A grounded answer and the authorized sources the model was given. */
+  | { kind: "answered"; answer: string; sources: RetrievedSource[]; unverifiedSourceNumbers: number[] }
+  /** Authorized sources were found, but they do not answer the question. */
+  | { kind: "insufficient_context"; message: string }
+  /** No authorized source was found; the model was not called. */
+  | { kind: "no_authorized_context"; message: string };

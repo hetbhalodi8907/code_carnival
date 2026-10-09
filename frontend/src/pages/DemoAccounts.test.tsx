@@ -18,7 +18,7 @@ const SUPER_ADMIN_USER: CurrentUser = {
 const LOGIN_OK = { body: { access_token: "issued-token", token_type: "bearer", expires_in: 1800 } };
 
 describe("hackathon demo accounts", () => {
-  it("renders one card per role with real seeded emails and demo passwords", () => {
+  it("renders one card per role with the real seeded emails", () => {
     mockFetch({});
     renderApp("/login");
 
@@ -35,7 +35,8 @@ describe("hackathon demo accounts", () => {
       const card = screen.getByTestId(`demo-account-${account.role}`);
       expect(card).toHaveTextContent(expected[account.role]);
       expect(card).toHaveTextContent(account.email);
-      expect(card).toHaveTextContent(account.password);
+      // The card shows the email only; the password is filled into the form on selection.
+      expect(card).not.toHaveTextContent(account.password);
       expect(card).toHaveAttribute("aria-pressed", "false");
     }
     expect(screen.getByText(/Local demo credentials · not for production/)).toBeInTheDocument();
@@ -52,14 +53,14 @@ describe("hackathon demo accounts", () => {
     expect(screen.getByLabelText("Work email")).toHaveValue(finance.email);
     expect(screen.getByLabelText("Password")).toHaveValue(finance.password);
     expect(screen.getByTestId("demo-account-FINANCE_MANAGER")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("selected-demo-account")).toHaveTextContent("Finance ManagerVikram Nair · vikram.nair@nexora.example");
+    expect(screen.getByTestId("demo-account-FINANCE_MANAGER")).toHaveTextContent("Selected");
     const submit = screen.getByRole("button", { name: "Log in as Finance Manager" });
     expect(submit).toHaveFocus();
     expect(fetchMock).not.toHaveBeenCalled();
 
     // Editing a field clears the selection: it is derived from the form, not stored.
     await user.type(screen.getByLabelText("Password"), "x");
-    expect(screen.queryByTestId("selected-demo-account")).not.toBeInTheDocument();
+    expect(screen.getByTestId("demo-account-FINANCE_MANAGER")).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "Log in" })).toBeInTheDocument();
   });
 

@@ -456,7 +456,7 @@ class DemoDatasetDatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(missing, 0)
 
     async def test_embeddings_without_configuration_fail_before_writes(self) -> None:
-        with patch.object(settings, "openai_api_key", None):
+        with patch.object(settings, "embedding_provider", "openai"), patch.object(settings, "openai_api_key", None):
             with self.assertRaises(EmbeddingConfigurationError):
                 await self.generate(with_embeddings=True)
 

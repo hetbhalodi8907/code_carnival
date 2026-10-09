@@ -2,7 +2,7 @@
 
 ## Current phase
 
-Part 5.1–5.3 (authentication, RBAC + authorization, retrieval-level security): complete. Next task: Part 6 (RAG engine), awaiting approval.
+Part 6.3 (authenticated assistant query API): complete. Next task: awaiting instruction (Part 6.4 or Part 7 citation validation); not started.
 
 ## Phase summary
 
@@ -19,8 +19,100 @@ Part 5.1–5.3 (authentication, RBAC + authorization, retrieval-level security):
 - Frontend milestone 1 (basic demo-ready client): complete.
 - Hackathon demo login experience: complete (six demo accounts, demo DB passwords set).
 - Part 6.2 (provider layer only) — Groq LLM provider integrated and live-verified; no RAG pipeline or endpoint yet.
+- Part 6.1 — Query processing + secure context construction: complete (internal service; no LLM call, no new endpoint).
+- Part 6.2 — Grounded LLM generation: complete (internal service over the existing Groq provider).
+- Part 6.3 — Authenticated assistant query API: complete (`POST /api/v1/assistant/query`).
 
 ## Completed tasks
+
+### Final backend-to-frontend compatibility audit
+
+- [x] **Image page discrepancy resolved:** the frontend image upload page DOES exist (`ImageUploadPage.tsx`, `services/images.ts`, route `/app/upload-image`, nav entry "Upload images"; files dated 21:23 to 21:25). An earlier backend report and the first version of the runbook said it did not; that was stale and wrong, and the runbook is corrected.
+- [x] **Contracts match:** every field of the six audited endpoints' response schemas (login token, current user, PDF ingest, image ingest, embeddings retry, assistant request and response) was compared programmatically against the frontend wire types: no missing or wrongly optional fields, multipart field `file` for both uploads, bearer auth, and the documented 400/413/422/502/503 handling. The frontend does not model four additive assistant fields (`citation_check`, `rejected_source_numbers`, `source_type`, `cited`), which it ignores safely.
+- [x] **Live browser check** (real Vite dev server and proxy, real backend on `rag_system`, no Groq): CEO account uploaded a synthetic PDF (one request, no embeddings call, "Ready to search", indexed with the local model) and a synthetic PNG (one request, real OCR 4 lines at 99%, "Ready to search"); a fake image was refused with the server's message; the Finance Manager sees no upload navigation and the pages show "isn't available" with no request sent. Temporary records (4 PDFs from repeated runs, 1 PNG) and files were deleted, and a before/after snapshot of users, password hashes, roles, permissions, documents, chunk text, embeddings, grants and structured tables was identical.
+- [x] Frontend 429 handling was added afterwards by the frontend session ("The assistant is busy"); it is present in the code but was not exercised live.
+- [x] Final handoff: `backend/data/demo/README.md` now has a "Verification status" section (live browser, API, previously reported tests, unverified items, Groq quota). Nothing was re-executed. Remaining known risk: the Groq free-tier quota.
+- [ ] Not re-run: backend suite (last 325/325) and frontend suite (not touched in this audit); no Groq calls were made (quota).
+
+### Submission verification (backend) and rate-limit handling
+
+- [x] End-to-end check on `rag_system` (in-process app, real login, real local embeddings, real OCR, real Groq `openai/gpt-oss-120b` with a recording wrapper): existing Finance Q&A answered with every source matching its database chunk (document, title, page, locator); a synthetic PDF uploaded as SUPER_ADMIN was extracted into 2 page chunks, embedded at 384 dimensions, granted to the uploader only, and answered with `page:2` source metadata; a synthetic PNG was read by real OCR (5 lines, mean confidence 0.98), embedded, indexed and answered with an `image` source; the structured headcount question was answered from structured rows. Five other demo accounts asked 3 questions each (15 requests): no temporary document ID or text appeared in any response or in the SOURCES sent to Groq (the same scan detected the secrets in the CEO's own prompts). All temporary rows and files were then deleted; counts and checksums of users, password hashes, roles, permissions, documents, chunk content and embeddings, grants and structured tables matched the baseline exactly.
+- [x] Found: Groq free-tier limits (8,000 tokens/minute, daily token allowance). Heavy repeated testing exhausted the daily allowance (`retry-after` about 10 minutes), and rate limits surfaced as a generic 502. Fix: `LLMProviderRateLimitError`; the provider waits once for a short `Retry-After` (`LLM_RATE_LIMIT_MAX_WAIT_SECONDS`, default 45), otherwise the assistant returns HTTP 429 with a fixed message. Unit-tested; the live short-wait path was not exercised because the daily limit was already exhausted at that point.
+- [x] Focused tests after the fix: provider 12, generation 23, assistant API 24, unified 7, PDF upload 5, all passing. Full suite after the change: 325/325 passed, 0 skipped.
+- [x] Submission runbook written in `backend/data/demo/README.md` (environment, PostgreSQL, backend, frontend pointer, login, PDF and image upload, questions, limitations, recovery).
+- [ ] Open: avoid heavy rehearsal before the presentation; the free Groq allowance resets on a rolling basis.
+
+### Parts 7–10 and PDF upload indexing (backend)
+
+- [x] **Part 7 citations:** `app/services/rag/citations.py` normalizes `[S1]`, `【S1】`, `［S1］`, `[S1, S2]` to ASCII `[S<n>]`, removes markers that match no source retrieved for the request (reported as `rejected_source_numbers`), and replaces fabricated UUIDs. `citation_check` is passed/partial/none; each source has `cited` and `source_type`. A surviving marker proves the source exists and was authorized, not that it supports the sentence: claim-level verification is NOT implemented. All response additions are optional, so the frontend contract still holds.
+- [x] **Part 8 structured retrieval:** tables `projects` and `employee_compensation` (migration `b2e5d8a1c4f3`, reversible, verified on the test DB first). A deterministic router (no LLM-written SQL) maps questions to six fixed intents: headcount by department, department projects, employee directory, own profile, own compensation, named employee compensation. Row-level access is in each statement's WHERE: directory data needs an active user with `documents:read`; compensation needs the employee's own row or `hr:read`. Tests show it equals the document access matrix for every user. Seed: `scripts/seed_structured_data.py` (8 projects, 2 compensation rows matching the existing statements).
+- [x] **Part 9 OCR:** `POST /api/v1/documents/ingest-image` (`documents:write`; PNG/JPEG, magic bytes, `MAX_IMAGE_SIZE_MB`, `MAX_IMAGE_PIXELS`). RapidOCR (`rapidocr-onnxruntime`, pip only, no OS install) -> existing chunker -> shared `persist_document` (uploader-only grant) -> local embeddings. Empty text 422, missing engine 503. OCR text is retrieved as an ordinary document (`source_type="image"`). Demo: `scripts/seed_structured_data.py --with-ocr`.
+- [x] **Part 10 unified assistant:** `UnifiedContextBuilder` routes structured intents first, and falls back to authorization-aware document search (PDF and OCR) when there is no intent or no authorized row. The `/assistant/query` contract is unchanged apart from optional additions.
+- [x] **PDF upload indexing:** `POST /api/v1/documents/ingest` now embeds the document right after persisting it (`embedding_status`, `embedding_model` in the response), so it is searchable at once, by its uploader only. An embedding failure keeps the upload and reports `failed`/`not_configured`; `POST /embeddings/documents/{id}` can retry.
+- [x] Verified: backend 324/324, 0 skipped. Live on `rag_system` with real Groq: finance, HR-denied, structured headcount and Rahul-denied questions; the OCR notice and structured rows seeded into the demo DB (additive). A synthetic PDF upload was answered for its uploader with `page:2` sources and was invisible to Finance, HR and Employee accounts; it was removed afterwards and the demo DB returned to its baseline.
+
+### Local embeddings (no OpenAI key) and live end-to-end verification
+
+- [x] New Groq key stored only in the git-ignored `backend/.env` (mode 600), replacing the previous key; never printed.
+- [x] `sentence-transformers` 5.7.0 (torch 2.14.1) installed; `requirements.txt` now lists `sentence-transformers>=3.0,<6.0`. The first install attempt timed out downloading torch and changed nothing; the retry with `UV_HTTP_TIMEOUT=600 UV_HTTP_RETRIES=5` succeeded.
+- [x] `SentenceTransformerEmbeddingProvider`: the local `sentence-transformers/all-MiniLM-L6-v2` model (384 dimensions, CPU, normalized), loaded once per process and run in a worker thread. It is the default provider; OpenAI remains optional and requests 384 dimensions.
+- [x] Migration `a1d4c7e9f3b2`: `document_chunks.embedding` from `vector(1536)` to `vector(384)`, clearing incompatible vectors and their model labels first (downgrade reverses this). Verified upgrade, downgrade and re-upgrade on `rag_system_test`; a seeded 1536-dimension vector was cleared, not mis-cast.
+- [x] `rag_system` migrated with users, passwords, roles, permissions, documents, chunks (content checksum) and grants unchanged. `generate_demo_dataset.py --with-embeddings` embedded all 45 chunks: one model, 384 dimensions, unit norm, 45 distinct vectors. A rerun embedded nothing; re-embedding stored chunks with the query-time service reproduced them exactly (cosine 1.0).
+- [x] Live `POST /api/v1/assistant/query` (real login, Groq `openai/gpt-oss-120b`):
+  - Finance Manager, finance question: answered (INR 1.5 crore), sources from Finance and Procurement reports;
+  - Finance Manager, HR salary bands: `insufficient_context`, no sources;
+  - Kabir, own CTC: answered (INR 11.4 lakh) from his own statement;
+  - Kabir, Rahul's CTC: `insufficient_context`.
+
+  Every source was within the access matrix. An invalid Groq key gave 502 "The language model request failed." and a missing local model gave 502 "The embedding provider could not generate embeddings."; no key, header, question or password appeared in any log.
+- [x] Tests: backend 275/275, 0 skipped (adds local-provider unit tests and a real cached-model test); frontend 35/35, typecheck, lint and build clean.
+
+### Frontend: chat aligned with the assistant query API
+
+- [x] `src/services/assistant.ts` sends `{query, top_k: 5}` to `POST /api/v1/assistant/query` through the existing API client (bearer token, JSON, 401 session expiry). It accepts only the documented `AssistantQueryResponse`; any other body is an error.
+- [x] Removed the provisional 404 fallback to `/search/vector`, so assistant failures are shown and never replaced by ungrounded search results. The provisional types and `ApiError.isMissingRoute` were removed too.
+- [x] All three statuses are rendered with the server's own messages. Sources show title, page and similarity (plain cosine score). `[S<n>]` stays unverified text and is not linked to any source.
+- [x] Errors: status-specific copy for 403, 422, 500, 502, 503, 504 and network failures; Retry for temporary failures re-asks in place (no duplicate messages); one request at a time.
+- [x] The dev-only mock now matches the real contract and remains compiled out of production builds.
+- [x] Tests: frontend 35/35 (assistant service 5, chat 10, API client 6, plus existing). Frontend mutation checks (old `question` field, silent search fallback, similarity as a percentage, duplicating retry, unvalidated bodies) were each caught. Typecheck, lint, build and `npm audit` are clean. Browser check against the real backend: the request is accepted and gets HTTP 503 (no embeddings), shown as a retryable error; layouts verified on desktop and mobile with intercepted responses. No backend files changed.
+
+### Part 6.3 — Authenticated assistant query API
+
+- [x] `POST /api/v1/assistant/query` (`app/api/v1/assistant.py`) is a thin route over existing services: `require_permission("documents", "read")` (the JWT current-user dependency), the `RagQuery` body, `create_context_builder`, then `create_answer_generator`. No new auth, retrieval, provider or prompt logic.
+- [x] Auth, permission and body validation run before the route: 401 without a valid token or for an inactive account, 403 without `documents:read`, and 422 for invalid bodies including identity fields. None of these reach retrieval or generation. Identity comes only from the token; query-string and header hints are ignored.
+- [x] The LLM and embedding configuration are both checked before any paid embedding call. Context is built as the token's user, and generation receives that exact query, context and user (6.2 ownership checks apply).
+- [x] `AssistantQueryResponse`: `status` (`answered`, `insufficient_context` or `no_authorized_context`), `answer`, `request_id`, `sources` and `unverified_source_numbers`. `sources` are metadata from the authoritative context (only when answered, no chunk text); model `[S<n>]` references stay labelled unverified. There is no `citations` field.
+- [x] Errors use the existing envelope with fixed messages: 403, 422 (unsafe question), 500 (inconsistent context or unexpected), 502 (embedding or LLM failure, bad output), 503 (not configured or retrieval unavailable), 504 (LLM timeout). A failure is never a 200 answer, and failures are logged as reason code plus request ID.
+- [x] `usable_items` is exposed from `generation.py` (a rename), so the API lists exactly the sources placed in the prompt.
+- [x] Tests: 24 API tests in `test_assistant_api.py` (real auth and retrieval on `rag_system_test`, fake LLM). The 6.2 endpoint-guard test now expects exactly this one new path. Route mutation checks were each caught: dropped permission, timeout mapped to 502, failure turned into 200, sources listed when not answered.
+- [x] Full suite 266/266, 0 skipped. `rag_system` unchanged. Live smoke test on `rag_system` (no LLM call): 401 without token, 503 "embedding provider is not configured" for a valid request, 422 for `user_id` in the body, 405 for GET.
+
+### Part 6.2 — Grounded LLM generation service
+
+- [x] `AnswerGenerator` (`app/services/rag/generation.py`) reuses the existing `LLMProvider`/`create_llm_provider()` (Groq), with no second client or configuration. It takes the validated `RagQuery`, the Part 6.1 `RetrievalContext` and the `AuthenticatedUser`, makes at most one provider call with the configured model, temperature, max tokens and timeout, and passes no tools.
+- [x] Grounding prompt: a fixed system message (sources only, no invention, `INSUFFICIENT_CONTEXT` signal, labelled inference, no tools or outside access, final answer only, rules immune to question and sources) and a user message holding the question plus the 6.1 sources inside unforgeable boundaries.
+- [x] Prompt-injection defences: retrieved text only in the user message, the system message proven identical to the fixed template, an explicit untrusted-data rule, and questions containing the boundary token refused. These are defences in depth, not a guarantee.
+- [x] No context, no call: empty or all-blank context returns a fixed `no_authorized_context` result without a provider call. Missing or malformed context, another user's or question's context, and duplicate ranks raise `invalid_context` without a call.
+- [x] Output validation: non-`LLMResponse`, non-text, empty, truncated (`length`), other non-`stop` finish reasons and output echoing the boundary token are rejected. `INSUFFICIENT_CONTEXT` maps to a fixed `insufficient_context` answer.
+- [x] `[S<n>]` references are stored as `unverified_source_numbers`; the authoritative context is kept on the result for Part 7.
+- [x] `RagGenerationError` has fixed messages and categories and no chained provider exception. Logs hold metadata only.
+- [x] Provider: added `LLMProviderTimeoutError(LLMProviderError)` for `openai.APITimeoutError`/`TimeoutError`, so timeouts can be told apart. It is backward compatible; no other provider behaviour changed.
+- [x] Tests: 23 generation tests (21 unit with fake providers and the real provider class over a fake client, 2 pipeline tests on the demo dataset in `rag_system_test` showing zero SQL during generation and no unauthorized chunk text in the prompt) and 1 provider timeout test. Mutation checks were each caught: calling the LLM on empty context, sources in the system message, a skipped context-owner check, accepted truncation, and chained provider errors.
+- [x] Full suite 242/242, 0 skipped. `rag_system` unchanged (`--verify-only` passes).
+- [x] Live check on 2026-10-09 (synthetic contexts, 3 Groq calls, `max_retries=0`, no database): grounded answer correct and cited, `INSUFFICIENT_CONTEXT` returned exactly and mapped, prompt-injection text ignored. All calls finished `stop` with 82–135 completion tokens (52–94 of them reasoning) against the 1,024 limit.
+- [x] Live answers over real demo context verified after local embeddings (see "Local embeddings" above). A few samples are not a guarantee of model behaviour.
+
+### Part 6.1 — Query processing + secure context construction
+
+- [x] `RagQuery` (`app/schemas/rag.py`): strict string, whitespace trimmed, empty, whitespace-only and over-2,000-character questions rejected. `top_k` is a strict integer from 1 to `VectorSearchService.MAX_TOP_K` (20), and identity fields are rejected.
+- [x] `ContextBuilder` (`app/services/rag/context.py`) takes the `AuthenticatedUser`, refuses users without `documents:read`, and calls the existing `VectorSearchService.search_text` as that user. It has no database session of its own.
+- [x] `VectorSearchResult` gains `document_title`, read through a join in the same authorized SQL statement (authorization still in WHERE before ORDER BY/LIMIT). The public `/search/vector` response is unchanged.
+- [x] Structured `RetrievalContext`: `status` (`context_ready` or `no_authorized_context`), ranked `ContextItem`s (rank, chunk/document IDs, title, chunk index, page, source locator, verbatim content, distance, similarity), distinct `sources`, counts, and a deterministic `render()`. Source boundaries carry a digest of the context, so document text cannot forge them.
+- [x] `RAG_MAX_CONTEXT_CHARACTERS` (32,000): lower-ranked results are dropped whole and counted, never cut.
+- [x] Failures propagate (embedding config/provider, vector search, database); only a successful empty retrieval yields `no_authorized_context`. Logs hold counts, user ID and duration only.
+- [x] Tests: 11 validation and 22 context tests (12 unit, 10 integration on the demo dataset in `rag_system_test`). Context chunk IDs are proven to be exactly the secure search's results in ranking order, the builder issues exactly one SQL statement (the authorized search), SUPER_ADMIN loses a document when its grant is revoked, and the Procurement injection stays data. Mutation checks (reversed order, an injected extra chunk, removed SQL predicate) are each caught.
+- [x] Full suite 218/218, 0 skipped. Live non-destructive regression on `rag_system`: all existing endpoints behave as before; row counts unchanged; `--verify-only` passes.
+- [x] Live context on `rag_system` verified once the 45 chunks were embedded locally (see "Local embeddings" above).
 
 ### Fix: blank white screen when starting the frontend
 
@@ -179,7 +271,7 @@ Part 5.1–5.3 (authentication, RBAC + authorization, retrieval-level security):
 
 ## Pending tasks
 
-- Phase 6 secure RAG (must call the authorization-aware `VectorSearchService` with the authenticated user).
+- Phase 7: validate `unverified_source_numbers` against `GenerationResult.context` before presenting citations.
 - Phase 7 citations and grounding.
 - Phase 8 structured database retrieval.
 - Phase 9 OCR.
@@ -190,20 +282,22 @@ Part 5.1–5.3 (authentication, RBAC + authorization, retrieval-level security):
 
 ## Known issues
 
+
 - Row-level authorization for structured records is not implemented yet (Phase 8). There are no structured-record tables yet.
 - No login rate limiting or account lockout yet (Phase 12 security hardening).
-- **Before the live demo:** retrieval on `rag_system` still needs embeddings: Groq has no embeddings API, and `OPENAI_API_KEY` is not configured (0 of 45 demo chunks embedded).
-- The Groq key was shared in chat; rotate it in the Groq console after the hackathon.
+- The Groq keys (old and new) were shared in chat; rotate the current one in the Groq console after the hackathon.
+- The model sometimes cites with full-width brackets (`【S1】`), which the `[S<n>]` parser does not recognize, so `unverified_source_numbers` can be empty for an answered reply. Display-only; Part 7 citation work should accept both forms.
+- `all-MiniLM-L6-v2` embeds at most 256 word pieces per chunk; text beyond that in a long chunk does not affect retrieval (it still reaches the LLM).
 - Demo PDF filenames in `backend/data/documents/` are deterministic and shared by every database. Any ad-hoc `reset_dataset` or `generate_dataset` run against `rag_system_test` must set `DOCUMENT_STORAGE_PATH` to a temporary directory, as the test fixtures do. Otherwise it deletes `rag_system`'s stored PDFs. This happened once on 2026-10-09 (database untouched). The PDFs were restored from the checksummed artifacts in `backend/data/demo/documents/`, and `--verify-only` passes.
 - Only the six hackathon demo accounts have passwords in `rag_system`; the other demo users get one only through `scripts/set_demo_passwords.py` with `DEMO_USER_PASSWORD`.
-- No `OPENAI_API_KEY` is configured locally, so the OpenAI provider has been verified only with fake clients; without a key the Part 4 endpoints return a safe 503.
+- The optional OpenAI embedding provider is verified only with fake clients (no OpenAI key is configured, or needed).
 - Existing non-blocking warnings: PyMuPDF legacy `fitz` deprecation, and asyncpg unclosed-connection/socket warnings from the Part 3 PDF-ingest API test, which uses the global engine across event loops.
 - Pre-existing Part 2.2 drift reported by `alembic check`: redundant `UniqueConstraint`s on association tables whose composite primary keys already enforce uniqueness. Not changed in Part 4.
 - Live database tests need `DATABASE_URL` (never put it in `backend/.env`). Run them against the test database, because several existing tests delete **all** documents: `DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_system_test .venv/bin/python -m unittest discover -s tests`. Running the suite against `rag_system` would delete the demo documents; restore them with `scripts/generate_demo_dataset.py`.
 
 ## Next immediate task
 
-Part 5.1–5.3 is complete and verified. Part 6 (RAG engine) starts only after explicit approval.
+Awaiting instruction (Part 6.4 or Part 7 citation validation). Not started; it begins only after explicit approval.
 
 ## Last updated
 

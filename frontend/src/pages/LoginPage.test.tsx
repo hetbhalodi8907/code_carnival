@@ -62,6 +62,21 @@ describe("authentication flow", () => {
     expect(getAccessToken()).toBeNull();
   });
 
+  it("toggles password visibility without changing the entered value", async () => {
+    mockFetch({});
+    const user = userEvent.setup();
+    renderApp("/login");
+
+    const password = screen.getByLabelText("Password");
+    await user.type(password, "secret-value");
+    expect(password).toHaveAttribute("type", "password");
+
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password).toHaveAttribute("type", "text");
+    expect(password).toHaveValue("secret-value");
+    expect(screen.getByRole("button", { name: "Hide password" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("redirects unauthenticated visitors from protected routes to /login", async () => {
     mockFetch({});
     renderApp("/app/chat");
@@ -75,7 +90,7 @@ describe("authentication flow", () => {
     mockFetch({ "GET /api/v1/auth/me": { body: FINANCE_MANAGER } });
     renderApp("/app/profile");
 
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile & session" })).toBeInTheDocument();
     expect(screen.getByText("finance · write")).toBeInTheDocument();
   });
 

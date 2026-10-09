@@ -25,6 +25,7 @@ from app.services.embeddings.storage import (
 from app.services.vector_search import (
     VectorSearchError,
     VectorSearchExecutionError,
+    VectorSearchResult,
     VectorSearchService,
 )
 
@@ -114,5 +115,13 @@ async def search_vectors(
         query=request.query,
         top_k=request.top_k,
         embedding_model=embedding_service.model,
-        results=[asdict(result) for result in results],
+        results=[_public_search_result(result) for result in results],
     )
+
+
+def _public_search_result(result: VectorSearchResult) -> dict:
+    """The /search/vector contract is unchanged; document titles and source types are used by RAG context."""
+    payload = asdict(result)
+    payload.pop("document_title")
+    payload.pop("source_type")
+    return payload

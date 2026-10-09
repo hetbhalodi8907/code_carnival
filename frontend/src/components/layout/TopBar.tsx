@@ -1,48 +1,51 @@
-import { LogOut } from "lucide-react";
-import { NavLink } from "react-router";
+import { Menu } from "lucide-react";
+import type { RefObject } from "react";
 
-import { NexoraWordmark } from "@/components/brand/NexoraLogo";
-import { NAV_ITEMS } from "@/components/layout/navigation";
-import { SecureModeIndicator } from "@/components/layout/SecureModeIndicator";
-import { ThemeToggle } from "@/components/layout/ThemeToggle";
-import { UserBadge } from "@/components/layout/UserBadge";
+import { SessionPill } from "@/components/layout/SessionPill";
+import { UserMenu } from "@/components/layout/UserMenu";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { primaryRoleLabel } from "@/lib/roles";
 import type { CurrentUser } from "@/types/api";
 
-export function TopBar({ user, onLogout }: { user: CurrentUser; onLogout: () => void }) {
+interface TopBarProps {
+  user: CurrentUser;
+  title: string;
+  crumb: string;
+  onLogout: () => void;
+  onOpenNavigation: () => void;
+  navigationId: string;
+  navigationOpen: boolean;
+  menuButtonRef: RefObject<HTMLButtonElement | null>;
+}
+
+export function TopBar({ user, title, crumb, onLogout, onOpenNavigation, navigationId, navigationOpen, menuButtonRef }: TopBarProps) {
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/65 sm:px-6">
-      <NexoraWordmark subtitle="Secure AI Workspace" textClassName="hidden sm:block" />
-
-      <nav className="ml-1 flex items-center gap-1 md:hidden" aria-label="Primary">
-        {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            aria-label={label}
-            title={label}
-            className={({ isActive }) =>
-              cn(
-                "grid size-9 place-items-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                isActive ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent",
-              )
-            }
-          >
-            <Icon className="size-4" aria-hidden="true" />
-          </NavLink>
-        ))}
-      </nav>
-
-      <div className="ml-auto flex items-center gap-2 sm:gap-3">
-        <SecureModeIndicator />
-        <div className="mx-1 hidden h-6 w-px bg-border sm:block" aria-hidden="true" />
-        <UserBadge user={user} />
-        <ThemeToggle />
-        <Button variant="outline" size="sm" onClick={onLogout} className="h-9 px-2.5 sm:px-3">
-          <LogOut aria-hidden="true" />
-          <span className="sr-only sm:not-sr-only">Log out</span>
-        </Button>
+    <header className="flex h-[60px] shrink-0 items-center gap-2 border-b border-border bg-card px-3 sm:gap-3 sm:px-5">
+      <Button
+        ref={menuButtonRef}
+        variant="ghost"
+        size="icon"
+        className="md:hidden"
+        onClick={onOpenNavigation}
+        aria-label="Open navigation"
+        aria-controls={navigationId}
+        aria-expanded={navigationOpen}
+      >
+        <Menu aria-hidden="true" />
+      </Button>
+      <div className="flex min-w-0 flex-col">
+        <h1 className="truncate text-base font-semibold">{title}</h1>
+        <span className="hidden text-xs text-subtle sm:block">{crumb}</span>
+      </div>
+      <div className="ml-auto flex items-center gap-2.5">
+        <SessionPill />
+        <span
+          className="hidden h-[30px] items-center rounded-full border border-border bg-muted px-2.5 text-xs font-semibold text-muted-foreground sm:inline-flex"
+          data-testid="current-user-role"
+        >
+          {primaryRoleLabel(user.roles)}
+        </span>
+        <UserMenu user={user} onLogout={onLogout} />
       </div>
     </header>
   );

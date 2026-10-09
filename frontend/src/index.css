@@ -1,30 +1,41 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
 
-@custom-variant dark (&:is(.dark *));
-
+/* Design tokens follow frontend/design_reference/open-design-prototype.html (light, minimal enterprise). */
 @theme inline {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
+  --color-card-foreground: var(--foreground);
+  --color-surface-2: var(--surface-2);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
   --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--muted);
+  --color-secondary-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--muted);
+  --color-accent-foreground: var(--foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-strong: var(--destructive-strong);
   --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-strong: var(--success-strong);
   --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-strong: var(--warning-strong);
   --color-border: var(--border);
-  --color-input: var(--input);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--border-strong);
   --color-ring: var(--ring);
 
   --radius-sm: calc(var(--radius) - 4px);
@@ -32,59 +43,41 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --animate-fade-up: fade-up 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  --animate-fade-in: fade-in 200ms ease-out both;
-  --animate-thinking: thinking 1.2s ease-in-out infinite;
-  --animate-signal: signal 2.4s ease-out infinite;
+  --shadow-xs: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-sm: 0 1px 3px rgb(16 24 40 / 0.07), 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-md: 0 6px 16px rgb(16 24 40 / 0.1);
 }
 
-/* Light theme (opt-in). */
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.985 0.003 255);
-  --foreground: oklch(0.205 0.02 262);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0.02 262);
-  --popover: oklch(0.21 0.02 262);
-  --popover-foreground: oklch(0.97 0.005 255);
-  --primary: oklch(0.52 0.17 262);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.955 0.006 255);
-  --secondary-foreground: oklch(0.25 0.02 262);
-  --muted: oklch(0.955 0.006 255);
-  --muted-foreground: oklch(0.47 0.02 262);
-  --accent: oklch(0.945 0.012 262);
-  --accent-foreground: oklch(0.22 0.02 262);
-  --destructive: oklch(0.56 0.21 25);
-  --success: oklch(0.56 0.13 160);
-  --warning: oklch(0.6 0.14 65);
-  --border: oklch(0.205 0.02 262 / 12%);
-  --input: oklch(0.205 0.02 262 / 16%);
-  --ring: oklch(0.52 0.17 262);
-}
+  color-scheme: light;
+  --radius: 0.5rem;
 
-/* Dark theme (default). */
-.dark {
-  --background: oklch(0.155 0.016 262);
-  --foreground: oklch(0.955 0.006 255);
-  --card: oklch(0.19 0.018 262);
-  --card-foreground: oklch(0.955 0.006 255);
-  --popover: oklch(0.23 0.02 262);
-  --popover-foreground: oklch(0.955 0.006 255);
-  --primary: oklch(0.74 0.13 258);
-  --primary-foreground: oklch(0.17 0.03 262);
-  --secondary: oklch(0.235 0.02 262);
-  --secondary-foreground: oklch(0.93 0.01 255);
-  --muted: oklch(0.225 0.018 262);
-  --muted-foreground: oklch(0.73 0.02 258);
-  --accent: oklch(0.25 0.025 262);
-  --accent-foreground: oklch(0.955 0.006 255);
-  --destructive: oklch(0.7 0.18 25);
-  --success: oklch(0.78 0.15 160);
-  --warning: oklch(0.83 0.13 80);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.74 0.13 258);
+  --background: #f6f7f9;
+  --card: #ffffff;
+  --surface-2: #fbfbfc;
+  --muted: #f1f3f5;
+  --foreground: #1f2430;
+  --muted-foreground: #5b6472;
+  --subtle: #8a929e;
+  --border: #e3e6ea;
+  --border-strong: #d3d8df;
+
+  --primary: #2563eb;
+  --primary-hover: #1d4fd8;
+  --primary-soft: #eaf0fe;
+  --primary-foreground: #ffffff;
+  /* Soft focus halo used by inputs and the composer. */
+  --ring: rgb(37 99 235 / 0.28);
+
+  --success: #2f855a;
+  --success-soft: #e7f3ec;
+  --success-strong: #256b45;
+  --warning: #b7791f;
+  --warning-soft: #fbf3e3;
+  --warning-strong: #7a520f;
+  --destructive: #c0392b;
+  --destructive-soft: #fbecea;
+  --destructive-strong: #8e2e22;
 }
 
 @layer base {
@@ -98,78 +91,29 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.01em;
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
   ::selection {
-    background: color-mix(in oklch, var(--primary) 35%, transparent);
+    background: var(--primary-soft);
   }
-}
-
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes thinking {
-  0%,
-  80%,
-  100% {
-    opacity: 0.25;
-    transform: scale(0.85);
-  }
-  40% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes signal {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--success) 55%, transparent);
-  }
-  70%,
-  100% {
-    box-shadow: 0 0 0 6px transparent;
-  }
-}
-
-/* Soft brand glow used on the login backdrop and the empty chat state. */
-.nexora-glow {
-  background-image:
-    radial-gradient(60% 50% at 50% 0%, color-mix(in oklch, var(--primary) 16%, transparent), transparent 70%),
-    radial-gradient(40% 40% at 85% 20%, color-mix(in oklch, var(--success) 8%, transparent), transparent 70%);
-}
-
-/* Glow that fades out inside its own box (no visible edges). */
-.nexora-glow-soft {
-  background-image: radial-gradient(
-    closest-side at 50% 32%,
-    color-mix(in oklch, var(--primary) 13%, transparent),
-    transparent
-  );
 }
 
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

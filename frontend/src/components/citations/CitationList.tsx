@@ -1,53 +1,38 @@
-import { BookOpenCheck } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { SourceCard } from "@/components/citations/SourceCard";
-import { citationLabel } from "@/lib/format";
-import { cn } from "@/lib/utils";
-import type { Citation } from "@/types/assistant";
+import type { RetrievedSource } from "@/types/assistant";
 
-/** Compact source chips under an answer; selecting one expands its source card. */
-export function CitationList({ citations }: { citations: Citation[] }) {
+/**
+ * The authorized sources the server gave the model, as expandable cards. These are
+ * retrieved sources, not verified citations of the answer.
+ */
+export function CitationList({ sources }: { sources: RetrievedSource[] }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  if (citations.length === 0) return null;
-  const open = citations.find((citation) => citation.id === openId) ?? null;
+  const idPrefix = useId();
+  if (sources.length === 0) return null;
 
   return (
-    <section className="mt-5 border-t border-border pt-4" aria-label="Sources">
-      <div className="mb-2.5 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        <BookOpenCheck className="size-3.5" aria-hidden="true" />
-        Sources
+    <section className="mt-4" aria-label="Sources retrieved for this answer">
+      <div className="flex items-center gap-2">
+        <h4 className="text-xs font-semibold uppercase tracking-[0.05em] text-subtle">Sources</h4>
+        <span className="rounded-full bg-muted px-2 py-px text-[11.5px] text-subtle">{sources.length}</span>
       </div>
-      <ul className="flex flex-wrap gap-2">
-        {citations.map((citation) => {
-          const selected = citation.id === openId;
-          return (
-            <li key={citation.id}>
-              <button
-                type="button"
-                onClick={() => setOpenId(selected ? null : citation.id)}
-                aria-expanded={selected}
-                className={cn(
-                  "inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                  selected
-                    ? "border-primary/50 bg-primary/15 text-foreground"
-                    : "border-border bg-background/60 text-muted-foreground hover:border-primary/40 hover:text-foreground",
-                )}
-              >
-                <span className="truncate">{citationLabel(citation)}</span>
-                {citation.pageNumber !== null ? (
-                  <span className="tabular-nums text-primary">· p. {citation.pageNumber}</span>
-                ) : null}
-              </button>
-            </li>
-          );
-        })}
+      <p className="mb-2.5 mt-1 text-xs text-muted-foreground">
+        Authorized passages the assistant was given. They are not yet verified as support for each statement.
+      </p>
+      <ul className="flex flex-col gap-2.5">
+        {sources.map((source) => (
+          <li key={source.id}>
+            <SourceCard
+              source={source}
+              expanded={source.id === openId}
+              onToggle={() => setOpenId(source.id === openId ? null : source.id)}
+              detailId={`${idPrefix}-${source.id}`}
+            />
+          </li>
+        ))}
       </ul>
-      {open ? (
-        <div className="mt-3">
-          <SourceCard key={open.id} citation={open} defaultExpanded />
-        </div>
-      ) : null}
     </section>
   );
 }

@@ -35,7 +35,7 @@ Paste commands without trailing `# comments`: macOS zsh passes them to npm as ex
 | `VITE_API_BASE_URL` | empty | Backend origin. Leave empty to call the same origin through the Vite proxy. |
 | `VITE_DEV_PROXY_TARGET` | `http://localhost:8000` | Where the dev/preview proxy forwards `/api`. |
 | `VITE_SHOW_DEMO_ACCOUNTS` | `true` | Show the clickable hackathon demo accounts on the login page. |
-| `VITE_USE_MOCK_API` | `false` | **Development only.** Simulates the not-yet-built assistant endpoint. Ignored in production builds. |
+| `VITE_USE_MOCK_API` | `false` | **Development only.** Simulates the assistant endpoint. Ignored in production builds. |
 
 The backend has no CORS middleware, so the browser always talks to the Vite origin and the proxy forwards `/api`. A production deployment should serve `dist/` and the API from the same origin, for example through a reverse proxy.
 
@@ -47,9 +47,11 @@ Never put secrets in these files: every `VITE_*` value is embedded in the public
 |---|---|---|
 | `/login` | public | Sign in (`POST /api/v1/auth/login`) |
 | `/app/chat` | signed in | Secure AI assistant |
+| `/app/upload` | signed in; usable with `documents:write` | Upload a PDF (`POST /api/v1/documents/ingest`) |
+| `/app/upload-image` | signed in; usable with `documents:write` | Upload a PNG/JPEG for OCR (`POST /api/v1/documents/ingest-image`) |
 | `/app/profile` | signed in | Identity, roles and permissions from `GET /api/v1/auth/me` |
 
-Route guards are UX only; every API call is authorized by the server.
+Route guards are UX only; every API call is authorized by the server. The Upload links and forms appear only for accounts whose `/auth/me` permissions include `documents:write` (SUPER_ADMIN only in the demo data); the backend enforces the permission on every upload. An uploaded document is readable only by its uploader until further grants are added.
 
 ## Backend contract
 
@@ -57,10 +59,32 @@ Route guards are UX only; every API call is authorized by the server.
 |---|---|
 | `POST /api/v1/auth/login` | Get a bearer token (`{access_token, token_type, expires_in}`) |
 | `GET /api/v1/auth/me` | Current user (`id, email, full_name, roles, permissions`) |
-| `POST /api/v1/assistant/query` | **Provisional.** Generated answers with citations. It does not exist yet (backend Part 6). |
-| `POST /api/v1/search/vector` | Fallback while the assistant endpoint is missing: shows the caller's authorized passages (page, similarity, excerpt) |
+| `POST /api/v1/assistant/query` | Chat: sends `{query, top_k: 5}` (the backend `RagQuery`) with the bearer token; returns `{status, answer, request_id, sources, unverified_source_numbers}` |
+| `POST /api/v1/documents/ingest` | PDF upload: multipart field `file`, up to 25 MB. Stores, chunks and embeds in one request; `embedding_status` (`completed`, `failed`, `not_configured`) and `embedding_model` say whether it is searchable |
+| `POST /api/v1/documents/ingest-image` | Image upload: multipart field `file`, PNG or JPEG up to 10 MB. Runs OCR, then stores, chunks and embeds in one request; returns `ocr_line_count`, `ocr_mean_confidence` and `embedding_status` (no `embedding_model`) |
+| `POST /api/v1/embeddings/documents/{document_id}` | Retry indexing for an already stored document (never re-uploads). Used only when `embedding_status` was not `completed` |
 
-Wire types live in `src/types/api.ts` and mirror the backend schemas. The assistant request and response types are marked **PROVISIONAL** and must be aligned with the real contract when Part 6 ships.
+Wire types live in `src/types/api.ts` and mirror the backend schemas (`backend/app/schemas/rag.py`). `src/services/assistant.ts` accepts only that contract: a body that does not match it is shown as an error, never as an answer.
+
+### Chat states
+
+| `status` | Shown as |
+|---|---|
+| `answered` | The answer, then **Sources retrieved for this answer**: document title, page and similarity (a plain cosine score, not a confidence percentage) for each authorized passage the model was given. The API returns no passage text. |
+| `insufficient_context` | "Not enough information" with the server's message |
+| `no_authorized_context` | "No authorized information found" with the server's message; no document is named |
+
+Sources are what the server retrieved, not verified citations. The model's `[S<n>]` markers stay plain text in the answer, are not linked to any source, and are listed beneath it as unverified. Citation validation is backend Part 7.
+
+Errors show fixed, friendly copy and never server detail:
+
+| HTTP | Shown as |
+|---|---|
+| 401 | Signs out and returns to `/login` with a "session expired" notice |
+| 403 / 422 | "Access restricted" / "Question not accepted" (no retry) |
+| network, 500, 502, 503, 504 | A specific message plus **Retry**, which re-asks the same question in place |
+
+One request runs at a time. Retry reuses the failed reply instead of adding new messages. The old fallback to `POST /api/v1/search/vector` has been removed: an assistant failure is reported, never replaced by plain search results that lack its grounding.
 
 ## Authentication
 
@@ -70,14 +94,14 @@ Wire types live in `src/types/api.ts` and mirror the backend schemas. The assist
 
 ## Hackathon demo accounts
 
-The login page shows six clickable **Hackathon Demo Accounts** from `src/config/demoAccounts.ts`, one active seeded user per role, with SUPER_ADMIN shown as "CEO / Super Admin". Clicking a card only fills the email and password. Logging in still calls the real `POST /api/v1/auth/login`, and the identity shown afterwards comes from `GET /api/v1/auth/me`. These are intentionally public, **local-demo-only** credentials. The backend test suite fails if this file drifts from `backend/demo_dataset/credentials.py`. Set `VITE_SHOW_DEMO_ACCOUNTS=false` to hide them; the build then leaves them out of the bundle.
+The login page shows six clickable **Hackathon Demo Accounts** from `src/config/demoAccounts.ts`, one active seeded user per role, with SUPER_ADMIN shown as "CEO / Super Admin". The cards show each role, its description and its email; clicking one fills the email and password (the password is not displayed on the card). Logging in still calls the real `POST /api/v1/auth/login`, and the identity shown afterwards comes from `GET /api/v1/auth/me`. These are intentionally public, **local-demo-only** credentials. The backend test suite fails if this file drifts from `backend/demo_dataset/credentials.py`. Set `VITE_SHOW_DEMO_ACCOUNTS=false` to hide them; the build then leaves them out of the bundle.
 
 ## Mock mode
 
-Do not use mock mode for a security demo: it simulates server responses in the browser. `VITE_USE_MOCK_API=true npm run dev` replaces **only** the missing assistant endpoint with `src/mocks/mockAssistant.ts`. That file simulates answers, citations and restricted states for the demo questions. The chat header shows a **Mock responses** badge. Login, `/auth/me` and everything else still use the real backend. Production builds compile the mock out entirely; the bundle was checked for this.
+Do not use mock mode for a security demo: it simulates server responses in the browser. `VITE_USE_MOCK_API=true npm run dev` replaces **only** the assistant endpoint with `src/mocks/mockAssistant.ts`, for previewing the chat without a backend that has embeddings. That file simulates the three statuses for the demo questions. The chat header shows a **Mock responses** badge. Login, `/auth/me` and everything else still use the real backend. Production builds compile the mock out entirely; the bundle was checked for this.
 
 ## Known limitations
 
 - `/auth/me` returns no department, so only role and email are shown.
-- `/search/vector` returns no document titles, so fallback passages are labelled "Authorized source" with page numbers.
-- Until the backend has embeddings (an OpenAI key or another embedding provider) and the assistant endpoint (Part 6), real chat requests show "Service temporarily unavailable".
+- The backend embeds locally (no OpenAI key). If its chunks are not embedded yet, or its model is unavailable, chat requests fail with 502/503 and show a retryable error.
+- Sources are not yet verified citations (backend Part 7).

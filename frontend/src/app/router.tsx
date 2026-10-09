@@ -3,8 +3,10 @@ import { Navigate, Route, Routes } from "react-router";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppShell } from "@/components/layout/AppShell";
 import { ChatPage } from "@/pages/ChatPage";
+import { ImageUploadPage } from "@/pages/ImageUploadPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ProfilePage } from "@/pages/ProfilePage";
+import { UploadPage } from "@/pages/UploadPage";
 
 export function AppRoutes() {
   return (
@@ -14,6 +16,8 @@ export function AppRoutes() {
         <Route element={<AppShell />}>
           <Route index element={<Navigate to="chat" replace />} />
           <Route path="chat" element={<ChatPage />} />
+          <Route path="upload" element={<UploadPage />} />
+          <Route path="upload-image" element={<ImageUploadPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Route>

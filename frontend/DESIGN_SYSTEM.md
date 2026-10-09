@@ -1,74 +1,74 @@
 # Nexora frontend design system
 
-**NEXORA · Secure AI Workspace.** A calm, dark-first enterprise interface. It should read as *secure, private, intelligent*: quiet surfaces, one confident accent, and status colours used only where they carry meaning.
+**NEXORA · Secure Enterprise AI Knowledge Platform.** A minimal enterprise interface: white surfaces on a light grey page, thin borders, readable type and one restrained blue accent. The visual reference is [design_reference/open-design-prototype.html](design_reference/open-design-prototype.html); it is a static design reference only. The application never uses its fake accounts, simulated answers or mock sign-in.
 
 ## Principles
 
 1. **Security is visible but never invented.** The UI shows what the server decided. It never computes access itself and never shows per-request "checks" the backend did not return.
-2. **Answers first.** Text is readable at a comfortable measure (`max-w-3xl`). Decoration never competes with content.
-3. **One accent.** Signal blue marks interaction. Emerald means *secure mode*, amber means *restricted*, red means *error*. These colours are not used for anything else.
-4. **Subtle motion.** 150–250 ms fades and lifts. Everything respects `prefers-reduced-motion`.
+2. **Answers first.** Text stays readable at a comfortable measure. Decoration never competes with content.
+3. **One accent.** Blue marks interaction and selection. Green means an authenticated session, amber means a restricted or temporarily unavailable state, red means an error. These colours are used for nothing else.
+4. **Flat and quiet.** No gradients, glow, blur or decorative shapes. Elevation comes from a hairline border and a very light shadow. The only moving element is the loading spinner, plus short colour transitions.
 
-## Colour tokens
+## Tokens
 
-Defined as CSS variables in `src/index.css` (OKLCH). Dark is the default; light is opt-in via the theme toggle.
+Defined as CSS variables in `src/index.css` and mapped to Tailwind colours. The app is light only.
 
-| Token | Dark | Light | Use |
-|---|---|---|---|
-| `--background` | deep graphite-navy | near-white | page |
-| `--card` | +1 step | white | surfaces, message cards |
-| `--muted` / `--muted-foreground` | low-contrast fill / secondary text | | metadata, hints |
-| `--border` | white at 9 % | slate at 12 % | hairlines |
-| `--primary` | signal blue (L 0.72) on dark text | deeper blue (L 0.52) on white | buttons, focus ring, user bubble tint |
-| `--success` | emerald | emerald | secure-mode dot and badge |
-| `--warning` | amber | amber | access-restricted state |
-| `--destructive` | red | red | errors |
+| Token | Value | Use |
+|---|---|---|
+| `background` | `#F6F7F9` | page |
+| `card` | `#FFFFFF` | surfaces, sidebar, top bar, answer cards |
+| `surface-2` | `#FBFBFC` | hover and detail panels |
+| `muted` | `#F1F3F5` | chips, icon tiles, hover fills |
+| `foreground` / `muted-foreground` / `subtle` | `#1F2430` / `#5B6472` / `#8A929E` | primary, secondary, tertiary text |
+| `border` / `border-strong` | `#E3E6EA` / `#D3D8DF` | hairlines / inputs and secondary buttons |
+| `primary` / `primary-hover` / `primary-soft` | `#2563EB` / `#1D4FD8` / `#EAF0FE` | buttons, links, active navigation, user bubble |
+| `success`, `warning`, `destructive` | `#2F855A`, `#B7791F`, `#C0392B` | each with a `-soft` fill and a `-strong` text colour for contrast on that fill |
+| `ring` | `rgb(37 99 235 / 0.28)` | soft focus halo on inputs and the composer |
 
-Contrast targets: body text ≥ 7:1, secondary text ≥ 4.5:1, focus ring ≥ 3:1 against both surfaces.
+Keyboard focus is a 2 px blue outline with a 2 px offset (`:focus-visible`, set once in `index.css`).
 
-## Typography
+## Typography, radius, elevation
 
-- Family: **Inter Variable** (self-hosted via `@fontsource-variable/inter`, so it works offline), falling back to the system UI stack.
-- Display: 28–32 px / semibold / tight tracking (`text-3xl font-semibold tracking-tight`).
-- Page title: 20 px semibold. Card title: 15 px semibold.
-- Body: 15 px / 1.65 for chat answers, 14 px for UI.
-- Eyebrow labels: 11 px, uppercase, `tracking-[0.14em]`, muted.
-- Numbers in citations (page, similarity): `tabular-nums`.
-
-## Spacing, radius, elevation
-
-- 4 px grid. Page gutters are 16 px on mobile, 24 px on tablet and 32 px on desktop.
-- Radius: `--radius: 0.75rem`. Cards use `rounded-xl`, inputs and buttons `rounded-lg`, chips `rounded-full`.
-- Elevation: borders do most of the work. Cards get `shadow-sm`; the login card and composer get a soft, wide shadow. A faint primary-tinted radial glow appears only on the login backdrop and the empty chat state.
+- Family: **Inter Variable**, self-hosted through `@fontsource-variable/inter`, so it works offline. Monospace (system stack) is used for emails, page references and permission codes.
+- Page title 16 px semibold (top bar); section and card titles 14.5–17 px semibold; body and answers 14–14.5 px; metadata 12–13 px; uppercase labels 11–12 px with 0.04–0.05 em tracking.
+- Radius: `rounded-lg` 8 px for inputs, buttons and source cards; `rounded-xl` 12 px for cards and answers; pills are fully rounded.
+- Shadows: `shadow-xs` on cards and buttons, `shadow-sm` on the login card and hovered demo cards, `shadow-md` only on floating menus and the mobile drawer.
 
 ## Components
 
-| Component | Spec |
+| Component | Notes |
 |---|---|
-| **Button** | `default` (primary fill), `secondary`, `outline`, `ghost`, `link`; sizes `sm`, `default`, `lg`, `icon`. Visible 2 px focus ring. Loading shows a spinner and keeps the label. |
-| **Input / Textarea** | 40 px tall, `bg-background/60`, hairline border, primary focus ring. Each has a `<Label>`. |
-| **Badge** | `outline` (role), `success` (secure mode), `warning` (restricted), `muted`. |
-| **Card** | Hairline border, `bg-card`, `rounded-xl`. |
-| **Tooltip** | Radix, 200 ms delay, small dark surface. Used for the secure-mode explanation. |
+| `ui/button` | `default` (blue), `secondary` (white, strong border), `ghost`, `danger`, `link`; sizes `default` 40 px, `sm` 34 px, `icon` 36 px. |
+| `ui/input`, `ui/textarea`, `ui/label` | 40 px inputs with a blue border and soft halo on focus; 13 px semibold labels; every field has a label. |
+| `ui/badge` | Pills: `default` (blue), `muted`, `success`, `warning`, `destructive`. |
+| `ui/alert` | Inline message with an icon; `role="alert"` for errors, `role="status"` for notices. |
+| `ui/card`, `ui/avatar`, `ui/spinner` | Hairline card with header and content; initials avatar; loading spinner (always paired with text). |
+| `feedback/StateBlock` | Titled status card used for "no authorized sources", "not enough information" and request errors. |
+| `feedback/PageStatus` | Full-area loading message while a saved session is confirmed. |
+| `layout/*` | `AppShell` (sidebar + top bar), `Sidebar` (a drawer below `md`), `SessionCard`, `TopBar`, `SessionPill`, `UserMenu`. |
+| `auth/*` | `LoginForm` and `DemoAccounts`. |
+| `chat/*` | `AssistantHeader`, `ChatEmptyState`, `Composer`, `UserMessage`, `AssistantMessage`, `AssistantStates`. |
+| `citations/*` | `CitationList` and `SourceCard`: expandable cards for the sources the server retrieved. |
 
 ## Layout
 
-- **Login:** two columns on `lg+` (product statement on the left, sign-in card on the right); a single centred card below that.
-- **App shell:** top bar (64 px) with brand, secure-mode pill, user badge, theme toggle and logout. A 240 px side navigation (*AI Assistant*, *Profile*) on `md+`. Below `md`, navigation becomes icon buttons in the top bar.
-- **Chat:** header (title + subtitle), a scrollable conversation (`max-w-3xl`), and a composer pinned to the bottom with quick-prompt chips above it.
+- **Login:** two columns from `lg` (sign-in card 360–440 px, demo accounts to its right); a single column up to 720 px below that. The card comes first on small screens.
+- **App shell:** a 248 px sidebar (brand, Assistant, Profile, then the signed-in identity and Log out) and a 60 px top bar (page title, secure-session pill, role chip, account menu). Below `md` (768 px) the sidebar becomes a drawer opened from the top bar: focus moves into it, Escape and the scrim close it and focus returns to the menu button.
+- **Assistant:** a header, a scrolling conversation (max 860 px wide) and a composer pinned to the bottom.
+- **Profile:** identity card, session and authentication, access permissions, and a Log out card.
 
-## Chat states
+## Assistant states
 
 | State | Treatment |
 |---|---|
-| Empty | Brand mark, "Secure AI Workspace", invitation line, 4 example cards (clicking fills the input; nothing is sent). |
-| User message | Right-aligned, primary-tinted bubble. |
-| Loading | Assistant card with three pulsing dots: "Retrieving authorized sources…". No fake percentages or steps. |
-| Answer | Assistant card titled "Nexora AI". Readable text, then a hairline and a **Sources** row of citation chips. |
-| Authorized passages | Shown when the backend has retrieval but no answer generation yet. The card explains this and lists the passages as expandable source cards. |
-| Access restricted | Amber shield icon, "Access restricted", one neutral sentence. **No document names, departments or counts.** A static, muted "secure retrieval policy" note describes the product rule, not per-request results. |
-| Error | Red-tinted card with a friendly message by status (session expired, unavailable, invalid request, unexpected). Raw server payloads are never shown. |
+| Empty | Icon, "Ask across your company knowledge" and four sample questions. Selecting one only fills the composer. |
+| User message | Right-aligned blue bubble. |
+| Loading | A card with a spinner and "Retrieving authorized sources…". There are no progress steps because the server answers in one request. |
+| Answer | Card headed "NEXORA Assistant" with the answer text, "N authorized sources retrieved" and expandable source cards (title, page, similarity). The model's `[S<n>]` references are listed beneath as unverified. |
+| No authorized sources | The server's fixed message; no document names, counts or policy internals. |
+| Not enough information | The server's fixed message and a rephrasing hint. |
+| Error | Calm fixed copy by status, never raw server text. Temporary failures (network, 500, 502, 503, 504) offer **Retry**; 403, 404 and 422 do not. |
 
-## Citations
+## Sources
 
-A chip shows `Document title · p. N` (or `Authorized source · p. N` when the backend does not return a title). Clicking a chip expands its source card: excerpt, page and similarity as a percentage with `tabular-nums`. File paths, database IDs and access-control internals are never shown.
+A source card shows the document title the server returned and the page, if any. Expanding it shows the page and the cosine similarity as a two-decimal score (a similarity, not a confidence percentage). File paths, database IDs, passage text the server did not send and access-control internals are never shown. These are sources the server retrieved, not verified citations.

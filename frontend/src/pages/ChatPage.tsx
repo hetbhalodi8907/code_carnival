@@ -1,14 +1,11 @@
-import { FlaskConical, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AssistantHeader } from "@/components/chat/AssistantHeader";
 import { AssistantMessage } from "@/components/chat/AssistantMessage";
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { Composer } from "@/components/chat/Composer";
-import { QuickPrompts } from "@/components/chat/QuickPrompts";
 import type { ChatEntry } from "@/components/chat/types";
 import { UserMessage } from "@/components/chat/UserMessage";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { USE_MOCK_ASSISTANT } from "@/config/env";
 import { useAuth } from "@/context/useAuth";
 import { toFriendlyError } from "@/services/api";
@@ -45,31 +42,26 @@ export function ChatPage() {
     composer.current?.focus();
   }, []);
 
-  async function submit() {
-    const question = draft.trim();
-    if (!question || pending || !user) return;
-    const userId = `m${nextId.current++}`;
-    const replyId = `m${nextId.current++}`;
-    setEntries((current) => [
-      ...current,
-      { id: userId, role: "user", text: question },
-      { id: replyId, role: "assistant", state: "pending" },
-    ]);
-    setDraft("");
-    setPending(true);
-
+  /** Ask the server and settle the existing reply entry, so a reply is never duplicated. */
+  async function answer(replyId: string, question: string) {
+    if (!user) return;
     const controller = new AbortController();
     inFlight.current = controller;
+    setPending(true);
     try {
       const result = await askAssistant(question, user, controller.signal);
       setEntries((current) =>
-        current.map((entry) => (entry.id === replyId ? { id: replyId, role: "assistant", state: "done", result } : entry)),
+        current.map((entry) =>
+          entry.id === replyId ? { id: replyId, role: "assistant", question, state: "done", result } : entry,
+        ),
       );
     } catch (error) {
       if (controller.signal.aborted) return;
       setEntries((current) =>
         current.map((entry) =>
-          entry.id === replyId ? { id: replyId, role: "assistant", state: "error", error: toFriendlyError(error) } : entry,
+          entry.id === replyId
+            ? { id: replyId, role: "assistant", question, state: "error", error: toFriendlyError(error) }
+            : entry,
         ),
       );
     } finally {
@@ -80,54 +72,65 @@ export function ChatPage() {
     }
   }
 
+  async function submit() {
+    const question = draft.trim();
+    // One request at a time; the ref also blocks repeats before the next render.
+    if (!question || pending || inFlight.current || !user) return;
+    const userId = `m${nextId.current++}`;
+    const replyId = `m${nextId.current++}`;
+    setEntries((current) => [
+      ...current,
+      { id: userId, role: "user", text: question },
+      { id: replyId, role: "assistant", question, state: "pending" },
+    ]);
+    setDraft("");
+    await answer(replyId, question);
+  }
+
+  /** Re-ask a failed question in place: the same reply entry goes back to pending. */
+  function retry(replyId: string) {
+    if (pending || inFlight.current) return;
+    const failed = entries.find((entry) => entry.id === replyId);
+    if (!failed || failed.role !== "assistant" || failed.state !== "error") return;
+    const { question } = failed;
+    setEntries((current) =>
+      current.map((entry) => (entry.id === replyId ? { id: replyId, role: "assistant", question, state: "pending" } : entry)),
+    );
+    void answer(replyId, question);
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-border px-4 py-4 sm:px-8">
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-semibold tracking-tight sm:text-xl">Secure AI Assistant</h1>
-            <p className="truncate text-sm text-muted-foreground">Ask about authorized company information</p>
+      <AssistantHeader mock={USE_MOCK_ASSISTANT} canReset={entries.length > 0} onReset={resetConversation} />
+
+      <div ref={scrollRegion} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {entries.length === 0 ? (
+          <ChatEmptyState onSelect={fillPrompt} />
+        ) : (
+          <div
+            className="mx-auto flex max-w-[908px] flex-col gap-[22px] px-4 pb-2 pt-[18px] sm:px-6 sm:pt-6"
+            aria-live="polite"
+            aria-relevant="additions text"
+          >
+            {entries.map((entry) =>
+              entry.role === "user" ? (
+                <UserMessage key={entry.id} text={entry.text} />
+              ) : (
+                <AssistantMessage
+                  key={entry.id}
+                  entry={entry}
+                  onRetry={() => retry(entry.id)}
+                  retryDisabled={pending}
+                />
+              ),
+            )}
           </div>
-          {USE_MOCK_ASSISTANT ? (
-            <Badge variant="warning" title="VITE_USE_MOCK_API=true: simulated responses, not the real backend">
-              <FlaskConical aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">Mock responses</span>
-            </Badge>
-          ) : null}
-          {entries.length > 0 ? (
-            <Button variant="outline" size="sm" onClick={resetConversation} title="New chat">
-              <RotateCcw aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">New chat</span>
-            </Button>
-          ) : null}
-        </div>
+        )}
       </div>
 
-      <div ref={scrollRegion} className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-8">
-        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col py-6">
-          {entries.length === 0 ? (
-            <ChatEmptyState onSelect={fillPrompt} />
-          ) : (
-            <div className="space-y-5" aria-live="polite" aria-relevant="additions text">
-              {entries.map((entry) =>
-                entry.role === "user" ? (
-                  <UserMessage key={entry.id} text={entry.text} />
-                ) : (
-                  <AssistantMessage key={entry.id} entry={entry} />
-                ),
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="border-t border-border bg-background/80 px-4 pb-4 pt-3 backdrop-blur sm:px-8">
-        <div className="mx-auto w-full max-w-3xl space-y-3">
-          <QuickPrompts onSelect={fillPrompt} disabled={pending} />
+      <div className="shrink-0 border-t border-border bg-card px-4 pb-4 pt-3 sm:px-6 sm:pt-3.5">
+        <div className="mx-auto max-w-[860px]">
           <Composer value={draft} onChange={setDraft} onSubmit={submit} pending={pending} textareaRef={composer} />
-          <p className="text-center text-xs text-muted-foreground">
-            Unauthorized information never reaches the AI — access is enforced by the server for every request.
-          </p>
         </div>
       </div>
     </div>

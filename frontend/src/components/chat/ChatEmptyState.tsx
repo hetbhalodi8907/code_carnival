@@ -1,38 +1,29 @@
-import { ArrowUpRight } from "lucide-react";
+import { MessagesSquare, Sparkles } from "lucide-react";
 
-import { NexoraMark } from "@/components/brand/NexoraLogo";
-import { SAMPLE_PROMPTS } from "@/components/chat/samplePrompts";
+import { SAMPLE_QUESTIONS } from "@/components/chat/samplePrompts";
 
 export function ChatEmptyState({ onSelect }: { onSelect: (question: string) => void }) {
   return (
-    <div className="nexora-glow-soft flex flex-1 flex-col items-center justify-center rounded-2xl px-2 py-10 text-center">
-      <NexoraMark className="size-14 animate-fade-up" />
-      <div className="mt-5 animate-fade-up text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground">
-        NEXORA
-      </div>
-      <h2 className="mt-1 animate-fade-up text-2xl font-semibold tracking-tight sm:text-3xl">Secure AI Workspace</h2>
-      <p className="mt-3 max-w-md animate-fade-up text-[15px] text-muted-foreground">
-        Ask a question about your authorized company information.
+    <div className="mx-auto max-w-[720px] px-4 py-10 text-center sm:px-6 sm:py-14">
+      <span className="mx-auto mb-4 inline-flex size-12 items-center justify-center rounded-xl border border-border bg-card text-primary shadow-xs">
+        <MessagesSquare className="size-[26px]" aria-hidden="true" />
+      </span>
+      <h3 className="mb-2 text-[19px] font-semibold">Ask across your company knowledge</h3>
+      <p className="mx-auto max-w-[56ch] text-sm text-muted-foreground">
+        Query policies, guidelines and department documents. Nexora retrieves the most relevant passages and answers
+        only from sources your account is authorized to read.
       </p>
-      <ul className="mt-8 grid w-full max-w-2xl gap-3 sm:grid-cols-2" aria-label="Example questions">
-        {SAMPLE_PROMPTS.map(({ label, question, icon: Icon }, index) => (
-          <li key={label} className="animate-fade-up" style={{ animationDelay: `${80 + index * 50}ms` }}>
+      <p className="mb-2.5 mt-6 text-xs font-semibold uppercase tracking-[0.05em] text-subtle">Try a sample question</p>
+      <ul className="flex flex-wrap justify-center gap-2" aria-label="Sample questions">
+        {SAMPLE_QUESTIONS.map((question) => (
+          <li key={question}>
             <button
               type="button"
               onClick={() => onSelect(question)}
-              className="group flex h-full w-full items-start gap-3 rounded-xl border border-border bg-card/70 p-4 text-left outline-none transition-[border-color,background-color,transform] hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
+              className="group inline-flex h-9 items-center gap-[7px] rounded-full border border-border-strong bg-card px-3.5 text-[13.5px] text-muted-foreground transition-colors hover:border-primary hover:bg-primary-soft hover:text-primary"
             >
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary">
-                <Icon className="size-4" aria-hidden="true" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-xs font-medium text-muted-foreground">{label}</span>
-                <span className="mt-0.5 block text-sm font-medium">{question}</span>
-              </span>
-              <ArrowUpRight
-                className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary"
-                aria-hidden="true"
-              />
+              <Sparkles className="size-[15px] text-subtle group-hover:text-primary" aria-hidden="true" />
+              {question}
             </button>
           </li>
         ))}

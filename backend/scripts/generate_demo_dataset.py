@@ -4,11 +4,13 @@ Run from the backend directory:
 
     .venv/bin/python scripts/generate_demo_dataset.py              # generate + verify
     .venv/bin/python scripts/generate_demo_dataset.py --verify-only
-    .venv/bin/python scripts/generate_demo_dataset.py --with-embeddings   # calls OpenAI
+    .venv/bin/python scripts/generate_demo_dataset.py --with-embeddings   # local model
     .venv/bin/python scripts/generate_demo_dataset.py --reset-demo-data   # demo rows only
 
-DATABASE_URL must be set. Embeddings are never generated unless --with-embeddings is
-passed, because that sends every chunk to the configured external provider.
+DATABASE_URL must be set. Embeddings are generated only with --with-embeddings, using
+the configured provider: the local sentence-transformers model by default (downloaded
+once, then offline), or OpenAI if EMBEDDING_PROVIDER=openai. Rerunning skips chunks
+already embedded with the configured model.
 """
 
 from __future__ import annotations
@@ -52,7 +54,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--with-embeddings",
         action="store_true",
-        help="Also embed demo chunks with the configured provider (external API cost).",
+        help="Also embed demo chunks with the configured provider (local model by default).",
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     return parser.parse_args(argv)
@@ -73,7 +75,7 @@ def print_generation(report: GenerationReport) -> None:
             f"{len(report.documents_already_embedded)} were already embedded."
         )
     else:
-        print("Embeddings: not requested (no external API calls were made).")
+        print("Embeddings: not requested.")
 
 
 async def run(args: argparse.Namespace) -> int:
