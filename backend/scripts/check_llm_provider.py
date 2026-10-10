@@ -4,7 +4,8 @@ Run from the backend directory:
 
     .venv/bin/python scripts/check_llm_provider.py
 
-Reads GROQ_API_KEY from the environment or backend/.env. The key is never printed.
+Reads the LLM settings from the environment or backend/.env: GROQ_API_KEY for Groq, or
+LM_STUDIO_BASE_URL / LM_STUDIO_MODEL when LLM_PROVIDER=lm_studio. Keys are never printed.
 """
 
 from __future__ import annotations

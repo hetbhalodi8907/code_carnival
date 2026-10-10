@@ -315,7 +315,7 @@ class AssistantQueryApiTests(DemoDatasetTestCase):
         for results in ([], [blank]):
             with self.subTest(results=len(results)):
                 self.search_override = StubSearch(results)
-                status, _, body = await self.ask(self.headers_for(FINANCE_MANAGER), {"query": "What is Rahul's CTC?"})
+                status, _, body = await self.ask(self.headers_for(FINANCE_MANAGER), {"query": "What is the office holiday calendar?"})
                 self.assertEqual(status, 200, body)
                 self.assertEqual(
                     (body["status"], body["answer"], body["sources"], body["unverified_source_numbers"]),
@@ -508,7 +508,7 @@ class AssistantQueryApiTests(DemoDatasetTestCase):
             {"/", "/api/v1/health", "/api/v1/ready", "/api/v1/auth/login", "/api/v1/auth/me",
              "/api/v1/documents/preview", "/api/v1/documents/ingest", "/api/v1/documents/ingest-image",
              "/api/v1/embeddings/documents/{document_id}",
-             "/api/v1/search/vector", PATH},
+             "/api/v1/search/vector", "/api/v1/dashboard/overview", PATH},
         )
         operation = spec["paths"][PATH]
         self.assertEqual(list(operation), ["post"])

@@ -109,6 +109,31 @@ export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_sy
 
 `frontend/` contains the React + TypeScript + Tailwind + shadcn/ui client: login, a protected app shell with the signed-in user's role, the secure AI chat (grounded answers with the sources retrieved for them, insufficient-context and no-authorized-context states, and safe errors), a profile page, and dark/light themes. It consumes only the existing backend APIs and makes no access decisions. Run it with `cd frontend && npm install && npm run dev` (it proxies `/api` to `localhost:8000`). See [frontend/README.md](frontend/README.md) and [frontend/DESIGN_SYSTEM.md](frontend/DESIGN_SYSTEM.md).
 
+## Role-aware dashboard
+
+After signing in, every account lands on `/app/dashboard` (the Assistant and the two upload pages are unchanged). The page is built from one read-only call, `GET /api/v1/dashboard/overview`, computed by the backend with database-side aggregation. It uses no LLM, so it works when Groq or LM Studio is down. The response carries no role or scope parameter: the user, roles and permissions come from the verified token and the database, and a section the account may not read is `null` (the server never sends it).
+
+| Account | Sections it receives |
+|---|---|
+| CEO / Super Admin | Organization projects (status, milestones, blockers, workload), finance, workforce, access control, readable documents |
+| Finance Manager (`finance:read`) | Budget vs actual, remaining budget, utilization, monthly trend, spend by category and project, recent expenses, pending approvals |
+| HR Manager (`hr:read`) | Active headcount, departments, roles, a compensation record COUNT (never amounts), HR documents they may read |
+| Engineering Manager (`engineering:read`) | Engineering projects plus any they lead or belong to: status, milestones, blockers, overdue, workload |
+| Security Manager (`security:read`) | Roles and permissions, document grant counts, indexing status |
+| Employee | Only projects they lead or are recorded on, with their role and upcoming milestones |
+
+Everyone also gets counts for the documents they are **granted** (the same `document_access_condition` as retrieval) and a "Not available" list for metrics with no stored source. Amounts stay in their own currency and are never added across currencies. Real zero values are shown as 0; a missing budget or percentage is shown as "Not available".
+
+**Data sources and limits.** Projects, departments, users, roles, permissions, document grants, documents and chunks are the existing records. Budgets, expenses, project members and milestones are **fictional Nexora demo data** in four additive tables (migration `c3f6e9b2d5a4`, seeded by `backend/scripts/seed_dashboard_data.py`); the page is labelled "Demo dataset". Not stored, so not shown: authentication failures, denied requests or other security events (server logs only), recent activity beyond newly added documents, real-time system health, hire dates or workforce history, and personal tasks.
+
+**Setup** (from `backend/`; both steps are additive and safe to rerun; check the printed database name first):
+
+```bash
+export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_system
+.venv/bin/alembic upgrade head
+.venv/bin/python scripts/seed_dashboard_data.py   # needs the demo dataset and seed_structured_data.py first
+```
+
 ## LLM provider (Groq)
 
 Answer generation will use Groq through its OpenAI-compatible API (the existing `openai` SDK; no extra dependency). Put `GROQ_API_KEY` in the git-ignored `backend/.env` (see `.env.example`). The default model is `openai/gpt-oss-120b`; override it with `LLM_MODEL`. Check connectivity with one small API call:
@@ -194,6 +219,9 @@ Response (`AssistantQueryResponse`):
 | `answered` | Grounded answer; `sources` lists the authorized passages the model was given | yes |
 | `insufficient_context` | The authorized passages do not answer the question; fixed message, no sources | yes |
 | `no_authorized_context` | No usable authorized passage; fixed message, no sources | **no** |
+| `access_denied` | The question targets information the user may not read. Fixed message ("You don't have permission to access the information requested."), no sources, no document details | yes (it replaces a non-answer; the model only ever saw authorized context) |
+
+`access_denied` is decided only by the server, and only after the model could not answer (`insufficient_context` or `no_authorized_context`), by an isolated check in `app/services/rag/access_denial.py`: (1) a deterministic policy rule for confidential compensation (a named person's, or your own without `employee:self_read`), and (2) a relevance probe, one SQL aggregate over documents the user may NOT read that returns a single similarity number (no text, ids or titles). Denial needs that similarity to reach `ACCESS_DENIAL_MIN_SIMILARITY` and to beat the best authorized similarity by `ACCESS_DENIAL_MARGIN`. Any probe error leaves the ordinary `insufficient_context` answer. The model is never asked to decide access and never sees restricted text. Limitation: the status reveals that restricted material relevant to the question exists; the thresholds are calibrated on the synthetic demo documents with the default local embedding model.
 
 How a request flows:
 1. FastAPI checks the token, the account's active status and `documents:read` before the route runs. Missing or invalid tokens get 401, a missing permission gets 403, and an invalid body gets 422; none of these reach retrieval or generation.

@@ -1,10 +1,10 @@
 import { FileUp, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { UploadLocked } from "@/components/documents/UploadLocked";
 import { FileDropzone } from "@/components/documents/FileDropzone";
 import { SelectedFile } from "@/components/documents/SelectedFile";
 import { IndexedOutcome, IndexingFailedOutcome } from "@/components/documents/UploadOutcome";
-import { StateBlock } from "@/components/feedback/StateBlock";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -35,23 +35,7 @@ export function UploadPage() {
   const canUpload = user?.permissions.includes("documents:write") ?? false;
   const busy = phase.kind === "uploading" || phase.kind === "indexing";
 
-  if (!canUpload) {
-    return (
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="mx-auto max-w-[720px]">
-          <StateBlock
-            icon={Lock}
-            tone="warning"
-            title="Uploading isn't available for your account"
-            hint="Uploading documents requires the documents:write permission, which the server grants by role."
-          >
-            Your account can ask the assistant about documents it has been granted access to, but it cannot add new
-            documents.
-          </StateBlock>
-        </div>
-      </div>
-    );
-  }
+  if (!canUpload) return <UploadLocked kind="PDFs" />;
 
   function choose(files: File[]) {
     if (busy) return;

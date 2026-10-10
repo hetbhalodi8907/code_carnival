@@ -68,11 +68,13 @@ class AssistantQueryResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["answered", "insufficient_context", "no_authorized_context"] = Field(
+    status: Literal["answered", "insufficient_context", "no_authorized_context", "access_denied"] = Field(
         description=(
             "answered: grounded answer from authorized sources. insufficient_context: the authorized "
             "sources do not answer the question. no_authorized_context: no authorized source was found "
-            "(the language model was not called)."
+            "(the language model was not called). access_denied: the question targets information the "
+            "user is not permitted to read; the server established this itself (never the language "
+            "model), `sources` is empty and nothing about the restricted material is returned."
         )
     )
     answer: str = Field(description="User-facing answer, or a fixed message when there is no answer.")

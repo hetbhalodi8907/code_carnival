@@ -16,4 +16,6 @@ export type AssistantResult =
   /** Authorized sources were found, but they do not answer the question. */
   | { kind: "insufficient_context"; message: string }
   /** No authorized source was found; the model was not called. */
-  | { kind: "no_authorized_context"; message: string };
+  | { kind: "no_authorized_context"; message: string }
+  /** The server determined the question targets information this user may not read. Carries no data. */
+  | { kind: "access_denied" };

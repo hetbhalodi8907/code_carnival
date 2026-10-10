@@ -76,7 +76,7 @@ describe("hackathon demo accounts", () => {
     await user.click(screen.getByTestId("demo-account-SUPER_ADMIN"));
     await user.click(screen.getByRole("button", { name: "Log in as CEO / Super Admin" }));
 
-    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/app/chat"));
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/app/dashboard"));
     expect(JSON.parse(String(calls(fetchMock, "POST", "/api/v1/auth/login")[0][1]?.body))).toEqual({
       email: ceo.email,
       password: ceo.password,

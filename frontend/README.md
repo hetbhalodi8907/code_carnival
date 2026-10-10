@@ -46,6 +46,7 @@ Never put secrets in these files: every `VITE_*` value is embedded in the public
 | Route | Access | Purpose |
 |---|---|---|
 | `/login` | public | Sign in (`POST /api/v1/auth/login`) |
+| `/app/dashboard` | signed in | Role-aware dashboard and application home (`GET /api/v1/dashboard/overview`) |
 | `/app/chat` | signed in | Secure AI assistant |
 | `/app/upload` | signed in; usable with `documents:write` | Upload a PDF (`POST /api/v1/documents/ingest`) |
 | `/app/upload-image` | signed in; usable with `documents:write` | Upload a PNG/JPEG for OCR (`POST /api/v1/documents/ingest-image`) |
@@ -59,10 +60,13 @@ Route guards are UX only; every API call is authorized by the server. The Upload
 |---|---|
 | `POST /api/v1/auth/login` | Get a bearer token (`{access_token, token_type, expires_in}`) |
 | `GET /api/v1/auth/me` | Current user (`id, email, full_name, roles, permissions`) |
+| `GET /api/v1/dashboard/overview` | Dashboard: one read-only call, no parameters. Sections the account may not read arrive as `null` and are not rendered; metrics with no stored source arrive in `unavailable` |
 | `POST /api/v1/assistant/query` | Chat: sends `{query, top_k: 5}` (the backend `RagQuery`) with the bearer token; returns `{status, answer, request_id, sources, unverified_source_numbers}` |
 | `POST /api/v1/documents/ingest` | PDF upload: multipart field `file`, up to 25 MB. Stores, chunks and embeds in one request; `embedding_status` (`completed`, `failed`, `not_configured`) and `embedding_model` say whether it is searchable |
 | `POST /api/v1/documents/ingest-image` | Image upload: multipart field `file`, PNG or JPEG up to 10 MB. Runs OCR, then stores, chunks and embeds in one request; returns `ocr_line_count`, `ocr_mean_confidence` and `embedding_status` (no `embedding_model`) |
 | `POST /api/v1/embeddings/documents/{document_id}` | Retry indexing for an already stored document (never re-uploads). Used only when `embedding_status` was not `completed` |
+
+The dashboard (`src/pages/DashboardPage.tsx`, `src/components/dashboard/`) renders only what the server sent, with loading skeletons, a retry on failure, refresh that keeps the last data, and empty states. Charts are plain HTML/CSS (no chart library); every figure is also printed as text. Wire types: `src/types/dashboard.ts`.
 
 Wire types live in `src/types/api.ts` and mirror the backend schemas (`backend/app/schemas/rag.py`). `src/services/assistant.ts` accepts only that contract: a body that does not match it is shown as an error, never as an answer.
 
@@ -73,6 +77,7 @@ Wire types live in `src/types/api.ts` and mirror the backend schemas (`backend/a
 | `answered` | The answer, then **Sources retrieved for this answer**: document title, page and similarity (a plain cosine score, not a confidence percentage) for each authorized passage the model was given. The API returns no passage text. |
 | `insufficient_context` | "Not enough information" with the server's message |
 | `no_authorized_context` | "No authorized information found" with the server's message; no document is named |
+| `access_denied` | **Access Denied**: "You don't have permission to access the information requested." plus "Contact your administrator if you believe you should have access." Fixed copy only; a denial that arrives with sources is rejected as malformed and shown as an error |
 
 Sources are what the server retrieved, not verified citations. The model's `[S<n>]` markers stay plain text in the answer, are not linked to any source, and are listed beneath it as unverified. Citation validation is backend Part 7.
 

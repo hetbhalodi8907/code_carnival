@@ -1,4 +1,4 @@
-import { CircleAlert, RotateCcw, SearchX, ShieldAlert, Unplug } from "lucide-react";
+import { CircleAlert, RotateCcw, SearchX, ShieldAlert, ShieldX, Unplug } from "lucide-react";
 
 import { StateBlock } from "@/components/feedback/StateBlock";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,26 @@ export function AssistantLoading() {
         <span>Retrieving authorized sources…</span>
       </div>
     </div>
+  );
+}
+
+/**
+ * The server established that the question targets information this user may not read. Fixed copy
+ * only: it names no document, record or person and shows no sources, so it reveals nothing the
+ * server did not already decide to say.
+ */
+export function AccessDenied() {
+  return (
+    <StateBlock
+      data-testid="access-denied"
+      icon={ShieldX}
+      tone="warning"
+      title="Access Denied"
+      hint="Contact your administrator if you believe you should have access."
+      hintIcon="info"
+    >
+      You don't have permission to access the information requested.
+    </StateBlock>
   );
 }
 

@@ -81,7 +81,7 @@ describe("image upload page", () => {
 
     expect(await screen.findByText("Uploading isn't available for your account")).toBeInTheDocument();
     expect(screen.queryByLabelText(/choose a file/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Upload images" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Upload images \(locked/ })).toBeInTheDocument();
   });
 
   it("rejects unsupported, mismatched, empty, oversized and multiple files without any request", async () => {

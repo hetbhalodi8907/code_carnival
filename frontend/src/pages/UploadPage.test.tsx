@@ -73,14 +73,15 @@ describe("upload page", () => {
     expect(await screen.findByRole("link", { name: "Upload" })).toBeInTheDocument();
   });
 
-  it("hides the link and the form from an account without documents:write", async () => {
+  it("shows a locked state, not the form, to an account without documents:write", async () => {
     signIn();
     mockFetch({ "GET /api/v1/auth/me": { body: FINANCE_MANAGER } });
     renderApp("/app/upload");
 
     expect(await screen.findByText("Uploading isn't available for your account")).toBeInTheDocument();
     expect(screen.queryByLabelText(/choose a file/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Upload" })).not.toBeInTheDocument();
+    // The entry stays discoverable, marked as locked.
+    expect(screen.getByRole("link", { name: /^Upload \(locked/ })).toBeInTheDocument();
   });
 
   it("rejects non-PDF, empty, oversized and multiple files before any request", async () => {

@@ -125,6 +125,17 @@ It is idempotent and additive: 8 projects, 2 compensation rows (Kabir Sethi INR 
 
 Upload your own: `POST /api/v1/documents/ingest` (PDF) or `/documents/ingest-image` (PNG/JPEG) as SUPER_ADMIN (the only demo role with `documents:write`). The upload is embedded immediately and is retrievable only by the uploader until grants are added.
 
+## Dashboard demo data
+
+`GET /api/v1/dashboard/overview` aggregates real stored rows. The existing tables (users, roles, permissions, grants, documents, chunks, projects, compensation) are reused; four small additive tables hold **fictional Nexora demo data**: `project_budgets` (8, INR, FY 2026-27), `project_expenses` (41: Approved, Pending and one Rejected; PRJ-FIN-02 is deliberately over budget), `project_members` (19; Manav Kapoor has no project, Farhan Qureshi is a deactivated member) and `project_milestones` (24, including one Blocked and two overdue). From `backend/`, after `alembic upgrade head` (migration `c3f6e9b2d5a4`):
+
+```bash
+export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_system
+.venv/bin/python scripts/seed_dashboard_data.py
+```
+
+It prints the target database, creates only missing rows (UUIDv5 ids, so reruns create nothing and change nothing) and never touches users, passwords, roles, permissions, grants, documents, chunks or embeddings. Rolling back is `alembic downgrade b2e5d8a1c4f3`, which drops only these four tables. Tests use `rag_system_test` and need `alembic upgrade head` there too.
+
 ## Submission runbook
 
 Everything below was verified end to end on the `rag_system` demo database with real authentication, real OCR, the local embedding model and real Groq calls. No secret values appear here; keys live only in the git-ignored `backend/.env`.
@@ -159,7 +170,7 @@ Check `http://localhost:8000/api/v1/ready` and the API docs at `http://localhost
 
 ### Start the frontend (terminal 2)
 
-Follow [frontend/README.md](../../../frontend/README.md) (`npm install`, then `npm run dev`; open http://localhost:5173). The frontend files are owned by a separate effort and are not described here. Routes present in the repository: `/login`, `/app/chat` (assistant), `/app/upload` (PDF upload), `/app/upload-image` (image/OCR upload) and `/app/profile`. The two upload pages are shown in the navigation only to accounts the server reports with `documents:write` (SUPER_ADMIN in the demo).
+Follow [frontend/README.md](../../../frontend/README.md) (`npm install`, then `npm run dev`; open http://localhost:5173). The frontend files are owned by a separate effort and are not described here. Routes present in the repository: `/login`, `/app/chat` (assistant), `/app/upload` (PDF upload), `/app/upload-image` (image/OCR upload) and `/app/profile`. Both upload entries are shown to every signed-in account; accounts without `documents:write` (everyone except SUPER_ADMIN in the demo) see them marked with a lock, and the pages show a locked explanation with a link back to the assistant and no upload controls. The server enforces the permission regardless.
 
 ### Log in
 
@@ -171,7 +182,7 @@ Frontend: the **Upload** page, `/app/upload` (SUPER_ADMIN). It makes one request
 
 ### Upload an image for OCR
 
-Frontend: the **Upload images** page, `/app/upload-image`. Like the PDF page, it requires `documents:write` (only SUPER_ADMIN in the demo; other accounts see "isn't available"). One request runs real OCR (RapidOCR, no operating-system install), stores the text as chunks, and embeds them with the local `all-MiniLM-L6-v2` model; Retry indexing is offered if embedding fails. API: `POST /api/v1/documents/ingest-image`, same shape, field `file`, PNG or JPEG up to 10 MB, `documents:write`. It runs real OCR, chunks, embeds and indexes in one request (`ocr_line_count`, `ocr_mean_confidence`, `embedding_status` in the response). No text found gives 422; OCR missing gives 503. Without the frontend, use `/docs` (Authorize with the login token, then "Try it out") or:
+Frontend: the **Upload images** page, `/app/upload-image`. Like the PDF page, it requires `documents:write` (only SUPER_ADMIN in the demo; other accounts see a locked page). One request runs real OCR (RapidOCR, no operating-system install), stores the text as chunks, and embeds them with the local `all-MiniLM-L6-v2` model; Retry indexing is offered if embedding fails. API: `POST /api/v1/documents/ingest-image`, same shape, field `file`, PNG or JPEG up to 10 MB, `documents:write`. It runs real OCR, chunks, embeds and indexes in one request (`ocr_line_count`, `ocr_mean_confidence`, `embedding_status` in the response). No text found gives 422; OCR missing gives 503. Without the frontend, use `/docs` (Authorize with the login token, then "Try it out") or:
 
 ```bash
 TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"ishaan.malhotra@nexora.example","password":"<demo password>"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
@@ -214,3 +225,74 @@ Nothing below was re-executed in the final handoff; it records what earlier runs
 **Not verified:** a live browser chat answer with Groq (the quota ran out first); a live browser retry-indexing click; a live 429 in the browser; other Groq models as a fallback; heavy concurrent use.
 
 **Groq quota:** about 8,000 tokens per minute plus a daily allowance, and a question costs roughly 2,000 to 3,000 tokens. Heavy rehearsal exhausted the daily allowance during testing, so rehearse sparingly. If a limit is hit, the assistant returns 429 and the chat offers Retry; wait and retry, or set `LLM_MODEL` to another Groq model (untested).
+
+### Latest end-to-end check (2026-10-10)
+
+Real browser (Playwright against the real Vite server and backend on `rag_system`, with a temporary synthetic PDF and PNG): the CEO account uploaded the PDF (one request, embedding completed, `all-MiniLM-L6-v2`, 384 dimensions) and the PNG (real OCR, 7 lines at 0.99 confidence, embedding completed); the Finance Manager, HR Manager and Employee accounts saw both upload entries locked and a locked page with no controls; their direct API upload attempts returned 403 and an unauthenticated one returned 401. One real assistant query through the chat UI returned an answer citing both uploads (`citation_check: passed`). Those two temporary documents and files were deleted by exact ID and the demo database matched its baseline. Frontend suite after the change: 104 of 104, with typecheck, lint and build clean. The backend suite was not rerun (no backend file changed).
+
+## Optional local fallback: Qwen through LM Studio
+
+Groq stays the primary model. With the fallback enabled, if Groq is rate limited (HTTP 429), times out, or is unavailable (HTTP 503), the backend tries your local LM Studio model **once** with exactly the same authorized context and prompt. Groq success never touches it. Request, authentication and validation errors never trigger it. Nothing changes if it is disabled (the default).
+
+### One-time setup in LM Studio
+
+1. In LM Studio's model search, download a Qwen chat model (a 7B to 9B instruct model runs comfortably on a MacBook Pro). Do not pick an embedding model.
+2. Load it (the model picker at the top of the chat or the Developer tab).
+3. Open the **Developer** tab, switch **Status** to *Running*, and note the port it shows. Leave server authentication off unless you want it. The server must stay on this machine (the default `127.0.0.1`).
+
+### Get the exact model ID
+
+```bash
+curl -s http://127.0.0.1:1235/v1/models
+```
+
+Use the port from the Developer tab. Copy the `id` of the Qwen model exactly (verified on this machine: `qwen/qwen3.5-9b`; the same server also lists an embedding model, which you must not use here).
+
+### Enable it in the private `backend/.env`
+
+`backend/.env` is git-ignored; never commit it. Add (using your port and exact model ID):
+
+```
+LM_STUDIO_ENABLED=true
+LM_STUDIO_BASE_URL=http://127.0.0.1:1235/v1
+LM_STUDIO_MODEL=qwen/qwen3.5-9b
+```
+
+Only set `LM_STUDIO_API_KEY` if LM Studio server authentication is on. Restart the backend. It refuses to start if the fallback is enabled without a model, or if the URL is not localhost, 127.0.0.1 or ::1 (so authorized document text cannot be sent to another machine). When the fallback is enabled, the Groq client also stops its own retries so the switch is quick.
+
+### Test local inference
+
+With LM Studio running and the model loaded, a quick check that the server answers and the ID is right is the `curl` above. To exercise the real provider path once (no Groq call) from `backend/`:
+
+```bash
+LM_STUDIO_ENABLED=true LM_STUDIO_BASE_URL=http://127.0.0.1:1235/v1 LM_STUDIO_MODEL=qwen/qwen3.5-9b .venv/bin/python -c "import asyncio; from app.services.llm.provider import create_local_provider, ChatMessage; print(asyncio.run(create_local_provider().generate([ChatMessage('user','Reply with the single word OK.')])).text)"
+```
+
+Measured on this machine (`qwen/qwen3.5-9b`, MLX 4-bit, temperature 0.0, same synthetic question each time):
+
+| Run | Token budget | Result | Time |
+|---|---|---|---|
+| 1 (earlier) | 2048 | Correct answer with a valid `[S1]` citation (about 1,060 tokens, mostly thinking) | 64s |
+| 2 | 2048 | **Failed**: no answer, a safe 502 | 87s |
+| 3 | 4096 | **Failed**: all 4,095 tokens were reasoning (about 15,000 characters), `finish_reason=length`, empty answer | 165s |
+
+So local answers are **slow and not reliable** while the model's thinking is on: it can reason until the budget runs out, and a larger budget does not fix that. A failed run costs the user 1.5 to 3 minutes and ends in the safe "assistant couldn't answer" error; nothing is invented. Documented ways to improve this are in the model's own settings in the app (the thinking toggle or prompt template), not in code; this repo does not send undocumented request fields. Qwen's guidance also discourages greedy decoding (temperature 0) for thinking models; `LLM_TEMPERATURE` is currently shared with Groq and was not changed. Neither change has been tested yet.
+
+### Local-only mode (no Groq at all)
+
+To use the local model as the **only** provider, set in the private `backend/.env`:
+
+```
+LLM_PROVIDER=lm_studio
+LM_STUDIO_BASE_URL=http://127.0.0.1:1235/v1
+LM_STUDIO_MODEL=qwen/qwen3.5-9b
+LM_STUDIO_TIMEOUT_SECONDS=180
+```
+
+No `GROQ_API_KEY` is needed, no Groq client is created, and there is no fallback wrapper. Retrieval, authorization, citation validation and the response format are unchanged. If LM Studio is down, the model ID is wrong, it times out, or it returns nothing usable, the user gets the usual safe 502/504 (a blank `LM_STUDIO_MODEL` gives the 503 "not configured"). To go back to Groq, set `LLM_PROVIDER=groq` (the default); the Groq code is still in place. Do not use this mode for the showcase until local answers are fast and reliable (see the table above).
+
+### What happens when things fail
+
+- Groq rate limited or down, LM Studio answering: the user gets a normal answer from the local model (the backend log shows "Answer generated by the local fallback" with the model ID only). Citation checks and source metadata are identical to Groq answers.
+- Groq down and LM Studio not running, the model not loaded, slow past the timeout, or returning nothing: the user sees the same safe error as before (429 "rate limit has been reached" or the usual 502/504). Nothing is invented and there is no retry loop.
+- Groq working: LM Studio is never called.

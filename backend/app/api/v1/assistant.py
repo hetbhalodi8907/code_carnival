@@ -22,6 +22,7 @@ from app.services.authorization import AuthenticatedUser
 from app.services.embeddings.provider import EmbeddingConfigurationError, EmbeddingProviderError
 from app.services.embeddings.service import EmbeddingServiceError
 from app.services.llm.provider import LLMConfigurationError
+from app.services.rag.access_denial import ACCESS_DENIED_ANSWER, create_access_denial_probe
 from app.services.rag.context import ContextAccessDeniedError
 from app.services.rag.unified import create_context_builder
 from app.services.rag.generation import (
@@ -80,7 +81,8 @@ async def query_assistant(
     The user comes only from the bearer token. Retrieval applies document authorization
     inside SQL before ranking and LIMIT, and the language model sees only that authorized
     context. With no usable authorized context, a fixed answer is returned without calling
-    the model. `sources` come from the server's retrieval; `unverified_source_numbers` are
+    the model. When the question cannot be answered, an isolated server-side check may report
+    ``access_denied`` (see ``access_denial.py``) instead of ``insufficient_context``. `sources` come from the server's retrieval; `unverified_source_numbers` are
     the model's own [S<n>] references and are not validated citations (Part 7).
     """
     request_id = getattr(request.state, "request_id", "unknown")
@@ -116,7 +118,34 @@ async def query_assistant(
     except RagGenerationError as exc:
         raise _failure(_GENERATION_FAILURE_STATUS[exc.category], str(exc), exc.category, request_id)
 
+    if result.status != "answered":
+        # The model could not answer. Decide, separately and from server-side rules only, whether
+        # that is because the question targets information this user may not read. The probe
+        # returns a bare boolean and never feeds the model; any failure means "not denied".
+        usable = usable_items(result.context)
+        probe = create_access_denial_probe(session_factory)
+        if await probe.is_denied(
+            query.query,
+            user,
+            best_authorized_similarity=max((item.similarity for item in usable), default=0.0),
+            request_id=request_id,
+        ):
+            return _denied_response(request_id)
+
     return _to_response(result, request_id)
+
+
+def _denied_response(request_id: str) -> AssistantQueryResponse:
+    """The generic denial: no sources, no citations, no document or record details."""
+    return AssistantQueryResponse(
+        status="access_denied",
+        answer=ACCESS_DENIED_ANSWER,
+        request_id=request_id,
+        sources=[],
+        unverified_source_numbers=[],
+        rejected_source_numbers=[],
+        citation_check="not_applicable",
+    )
 
 
 def _failure(status_code: int, detail: str, reason: str, request_id: str) -> HTTPException:

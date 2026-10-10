@@ -1,4 +1,4 @@
-import { LogOut, X } from "lucide-react";
+import { Lock, LogOut, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { NavLink } from "react-router";
 
@@ -50,24 +50,34 @@ export function Sidebar({ id, user, onLogout, open, onClose }: SidebarProps) {
       </div>
 
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto" aria-label="Sections">
-        {NAV_ITEMS.filter((item) => !item.requires || user.permissions.includes(item.requires)).map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            onClick={onClose}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-2.5 rounded-lg px-2.5 py-[9px] text-sm transition-colors",
-                isActive
-                  ? "bg-primary-soft font-semibold text-primary"
-                  : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
-              )
-            }
-          >
-            <Icon className="size-[18px]" aria-hidden="true" />
-            {label}
-          </NavLink>
-        ))}
+        {NAV_ITEMS.map(({ to, label, icon: Icon, requires }) => {
+          const locked = Boolean(requires) && !user.permissions.includes(requires as string);
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={onClose}
+              title={locked ? `Requires the ${requires} permission` : undefined}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-[9px] text-sm transition-colors",
+                  isActive
+                    ? "bg-primary-soft font-semibold text-primary"
+                    : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
+                )
+              }
+            >
+              <Icon className="size-[18px]" aria-hidden="true" />
+              {label}
+              {locked ? (
+                <>
+                  <Lock className="ml-auto size-3.5 shrink-0 opacity-70" aria-hidden="true" />
+                  <span className="sr-only">(locked: requires the {requires} permission)</span>
+                </>
+              ) : null}
+            </NavLink>
+          );
+        })}
       </nav>
 
       <div className="mt-2 flex flex-col gap-1.5 border-t border-border pt-3">

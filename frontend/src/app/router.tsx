@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppShell } from "@/components/layout/AppShell";
 import { ChatPage } from "@/pages/ChatPage";
+import { DashboardPage } from "@/pages/DashboardPage";
 import { ImageUploadPage } from "@/pages/ImageUploadPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ProfilePage } from "@/pages/ProfilePage";
@@ -14,14 +15,15 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/app" element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
-          <Route index element={<Navigate to="chat" replace />} />
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
           <Route path="chat" element={<ChatPage />} />
           <Route path="upload" element={<UploadPage />} />
           <Route path="upload-image" element={<ImageUploadPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Route>
-      <Route path="*" element={<Navigate to="/app/chat" replace />} />
+      <Route path="*" element={<Navigate to="/app/dashboard" replace />} />
     </Routes>
   );
 }

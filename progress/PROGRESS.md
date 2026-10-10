@@ -25,6 +25,32 @@ Part 6.3 (authenticated assistant query API): complete. Next task: awaiting inst
 
 ## Completed tasks
 
+### Role-aware dashboard (2026-10-10)
+
+- [x] `GET /api/v1/dashboard/overview` (`app/api/v1/dashboard.py`, `app/services/dashboard/service.py`, `app/schemas/dashboard.py`): read-only, database-side aggregation, no LLM, identity only from the verified token. Sections (`projects`, `finance`, `workforce`, `security`) are `null` unless the account holds the permission; documents are counted only through `document_access_condition`; the employee scope is projects they lead or are a member of; compensation is a record count only.
+- [x] Additive migration `c3f6e9b2d5a4` (budgets, expenses, project members, milestones) and idempotent fictional seed (`demo_dataset/dashboard.py`, `scripts/seed_dashboard_data.py`). Applied to `rag_system_test` and `rag_system`; before and after counts for users, roles, permissions, grants, documents, chunks, embeddings and a password-hash checksum were identical.
+- [x] Frontend `/app/dashboard` is the login destination and first sidebar item; Assistant and both upload pages unchanged.
+- [x] Not stored, shown as "Not available": security events, activity feed, system health, workforce history, personal tasks.
+- [x] Tests: `backend/tests/test_dashboard_api.py` (22), `frontend/src/pages/DashboardPage.test.tsx` (17). Full frontend suite 131 pass, tsc, eslint and build clean. Live check of all six demo logins on the real database and a real-browser run (desktop, tablet, mobile; no console errors).
+
+### Optional LM Studio (Qwen) fallback
+
+- [x] `FallbackLLMProvider` in `app/services/llm/provider.py` wraps the Groq provider and tries a local OpenAI-compatible LM Studio model once, only after a rate limit (429), timeout, HTTP 503 or connection failure (new `LLMProviderUnavailableError`). Auth, permission, request, validation and other server errors never trigger it. If the local attempt also fails, the original Groq error is raised, so the existing 429/504/502 behavior is unchanged. Off by default (`LM_STUDIO_ENABLED=false`). When on, the Groq client uses no SDK retries and no rate-limit wait, so failover is immediate.
+- [x] Settings: `LM_STUDIO_ENABLED`, `LM_STUDIO_BASE_URL`, `LM_STUDIO_MODEL`, `LM_STUDIO_API_KEY` (optional), `LM_STUDIO_TIMEOUT_SECONDS`, `LM_STUDIO_MAX_OUTPUT_TOKENS`. Startup validation requires a model and a loopback URL when enabled. The Groq key is never sent to the local server. Inline `<think>` text from Qwen is stripped from answers.
+- [x] No change to retrieval, authorization, prompts, citation validation, response schemas, embeddings, ingestion or the database. The local model receives exactly the messages the generation layer built from authorized context.
+- [x] Tests: `test_llm_fallback.py` (15, mocked clients only); breaking the trigger rule makes 6 of them fail. Related existing tests pass: provider 12, generation 23, assistant API 24, config 3. The full backend suite was not rerun.
+- [x] Real local inference verified once (no Groq): `qwen/qwen3.5-9b` on LM Studio at port 1235 answered a grounded question correctly with a valid citation in about 64 seconds (about 1,000 thinking tokens).
+- [x] Local-only mode: `LLM_PROVIDER=lm_studio` makes `create_llm_provider()` return the plain local provider (no Groq key, no client, no fallback wrapper). Default stays `groq`, so rollback is one setting; no Groq code was removed. 20 new mocked tests in `tests/test_llm_local_only.py`.
+- [ ] **Local-only is NOT showcase-ready:** two further real runs of `qwen/qwen3.5-9b` failed (thinking used the whole 2048- and then 4096-token budget; 87s and 165s; safe 502, nothing invented). Next step: turn thinking off for the model in the local app (or test a non-zero temperature), then re-measure.
+- [ ] Not verified: the end-to-end switch with a real Groq 429 (covered only with mocks), and the fallback running inside the live backend and browser.
+
+### Upload discoverability fix and live re-verification (2026-10-10)
+
+- [x] **Cause of the "invisible upload UI":** `Sidebar.tsx` filtered the navigation by permission, so any account without `documents:write` (all but the CEO account) never saw the Upload or Upload images entries. The pages and the backend were fine, and the servers had simply been stopped after the previous audit.
+- [x] **Fix (frontend only, no permission change):** both entries are shown to every signed-in account, marked with a lock plus accessible text for accounts lacking the permission; the two pages share a new `UploadLocked` state (permission explanation, "CEO / Super Admin currently has it", link back to the chat, no controls). Server-side authorization is unchanged. Permissions cannot flash while loading because the shell renders only after `/auth/me` returns.
+- [x] Tests: `UploadAccess.test.tsx` (17 tests across Finance, HR, Employee and CEO) fails 9 of 17 when the old filter is restored; two older tests that asserted the hiding were updated. Frontend 104/104, typecheck, lint and build clean.
+- [x] Real browser and API check passed 27 of 27 checks (see `backend/data/demo/README.md`, "Latest end-to-end check"); temporary documents were removed by exact ID and the demo database matched its baseline.
+
 ### Final backend-to-frontend compatibility audit
 
 - [x] **Image page discrepancy resolved:** the frontend image upload page DOES exist (`ImageUploadPage.tsx`, `services/images.ts`, route `/app/upload-image`, nav entry "Upload images"; files dated 21:23 to 21:25). An earlier backend report and the first version of the runbook said it did not; that was stale and wrong, and the runbook is corrected.

@@ -45,7 +45,11 @@ export interface AssistantQueryRequest {
   top_k?: number;
 }
 
-export type AssistantStatus = "answered" | "insufficient_context" | "no_authorized_context";
+/**
+ * "access_denied": the server itself (never the language model) established that the question targets
+ * information the user may not read. It carries no sources, citations or document details.
+ */
+export type AssistantStatus = "answered" | "insufficient_context" | "no_authorized_context" | "access_denied";
 
 /** An authorized passage the server gave the model: server metadata, not a validated citation. */
 export interface AssistantSource {

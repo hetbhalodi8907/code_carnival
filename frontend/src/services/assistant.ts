@@ -17,7 +17,12 @@ import type { AssistantResult } from "@/types/assistant";
 const ASSISTANT_PATH = "/api/v1/assistant/query";
 /** Sources retrieved per question (the server's default; the server allows 1–20). */
 const ASSISTANT_TOP_K = 5;
-const STATUSES: ReadonlySet<string> = new Set(["answered", "insufficient_context", "no_authorized_context"]);
+const STATUSES: ReadonlySet<string> = new Set([
+  "answered",
+  "insufficient_context",
+  "no_authorized_context",
+  "access_denied",
+]);
 
 /** The server answered successfully, but not with a valid AssistantQueryResponse. */
 export class UnexpectedResponseError extends Error {
@@ -60,6 +65,11 @@ function parseResponse(payload: unknown): AssistantQueryResponse {
   ) {
     throw new UnexpectedResponseError();
   }
+  // A denial never carries sources or citations. If it does, the response is malformed and nothing
+  // from it is shown.
+  if (body.status === "access_denied" && (body.sources.length > 0 || body.unverified_source_numbers.length > 0)) {
+    throw new UnexpectedResponseError();
+  }
   return body as AssistantQueryResponse;
 }
 
@@ -83,6 +93,9 @@ function toResult(response: AssistantQueryResponse): AssistantResult {
       return { kind: "insufficient_context", message: text };
     case "no_authorized_context":
       return { kind: "no_authorized_context", message: text };
+    case "access_denied":
+      // The denial is rendered from fixed copy; nothing the server sent with it is displayed.
+      return { kind: "access_denied" };
   }
 }
 

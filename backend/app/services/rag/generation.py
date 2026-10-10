@@ -321,8 +321,8 @@ def _to_result(response: object, context: RetrievalContext) -> GenerationResult:
 
 
 def create_answer_generator() -> AnswerGenerator:
-    """Wire the generator to the configured LLM provider (Groq).
+    """Wire the generator to the configured LLM provider (Groq, or the local LM Studio model).
 
-    Raises ``LLMConfigurationError`` when ``GROQ_API_KEY`` is not configured.
+    Raises ``LLMConfigurationError`` when the selected provider is not configured.
     """
     return AnswerGenerator(create_llm_provider())

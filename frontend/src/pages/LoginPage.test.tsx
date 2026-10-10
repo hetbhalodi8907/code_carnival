@@ -17,7 +17,7 @@ describe("authentication flow", () => {
     await user.type(screen.getByLabelText("Password"), "correct-password");
     await user.click(screen.getByRole("button", { name: "Log in" }));
 
-    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/app/chat"));
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/app/dashboard"));
     expect(screen.getByTestId("current-user-name")).toHaveTextContent("Vikram Nair");
     expect(screen.getByTestId("current-user-role")).toHaveTextContent("Finance Manager");
     expect(JSON.parse(String(calls(fetchMock, "POST", "/api/v1/auth/login")[0][1]?.body))).toEqual({

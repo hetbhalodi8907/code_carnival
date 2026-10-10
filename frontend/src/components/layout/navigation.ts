@@ -1,4 +1,4 @@
-import { FileUp, ImageUp, MessagesSquare, UserRound, type LucideIcon } from "lucide-react";
+import { FileUp, ImageUp, LayoutDashboard, MessagesSquare, UserRound, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   to: string;
@@ -7,11 +7,15 @@ export interface NavItem {
   /** Page title and breadcrumb line shown in the top bar. */
   title: string;
   crumb: string;
-  /** Shown only to accounts the server reports as holding this permission (the server still enforces it). */
+  /**
+   * The permission the server requires for this page. The entry is shown to every signed-in account;
+   * accounts without it see a lock and a locked page (the server still enforces the permission).
+   */
   requires?: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
+  { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard, title: "Dashboard", crumb: "Overview of what you can access" },
   { to: "/app/chat", label: "Assistant", icon: MessagesSquare, title: "Assistant", crumb: "Secure knowledge workspace" },
   {
     to: "/app/upload",

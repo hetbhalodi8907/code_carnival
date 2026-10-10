@@ -1,6 +1,6 @@
 import { MessagesSquare, Search } from "lucide-react";
 
-import { AssistantError, AssistantLoading, InsufficientContext, NoAuthorizedContext } from "@/components/chat/AssistantStates";
+import { AccessDenied, AssistantError, AssistantLoading, InsufficientContext, NoAuthorizedContext } from "@/components/chat/AssistantStates";
 import type { ChatEntry } from "@/components/chat/types";
 import { CitationList } from "@/components/citations/CitationList";
 import type { AssistantResult } from "@/types/assistant";
@@ -62,6 +62,8 @@ function Body({ entry, onRetry, retryDisabled }: { entry: AssistantEntry } & Ret
   if (entry.state === "error") return <AssistantError error={entry.error} onRetry={onRetry} retryDisabled={retryDisabled} />;
   const { result } = entry;
   switch (result.kind) {
+    case "access_denied":
+      return <AccessDenied />;
     case "no_authorized_context":
       return <NoAuthorizedContext message={result.message} />;
     case "insufficient_context":

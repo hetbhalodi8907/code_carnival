@@ -9,7 +9,7 @@ import { roleLabel } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/services/api";
 
-const DEFAULT_DESTINATION = "/app/chat";
+const DEFAULT_DESTINATION = "/app/dashboard";
 
 function loginErrorMessage(error: unknown): string {
   const status = error instanceof ApiError ? error.status : -1;
