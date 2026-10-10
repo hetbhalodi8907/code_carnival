@@ -43,10 +43,12 @@ def completion(text: object, model: str = "served-model") -> SimpleNamespace:
     )
 
 
-def provider(name: str, *, result: object = None, error: Exception | None = None) -> OpenAICompatibleLLMProvider:
+def provider(name: str, *, result: object = None, error: Exception | None = None, label: str | None = None) -> OpenAICompatibleLLMProvider:
     create = AsyncMock(return_value=result, side_effect=error)
     client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-    return OpenAICompatibleLLMProvider(client=client, model=name, temperature=0.0, max_tokens=64, rate_limit_max_wait_seconds=0.0)
+    return OpenAICompatibleLLMProvider(
+        client=client, model=name, temperature=0.0, max_tokens=64, rate_limit_max_wait_seconds=0.0, provider_name=label
+    )
 
 
 def calls(p: OpenAICompatibleLLMProvider) -> int:
@@ -70,6 +72,17 @@ class FallbackBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await wrapper.generate(MESSAGES)).text, "Groq answer")
         self.assertEqual((calls(primary), calls(local)), (1, 0))
         self.assertEqual(wrapper.model, "groq-model")
+
+    async def test_the_response_names_the_provider_that_actually_answered(self) -> None:
+        local = provider(LOCAL_MODEL, result=completion("Local answer", LOCAL_MODEL), label="lm_studio")
+        ok = FallbackLLMProvider(provider("groq-model", result=completion("Groq answer", "groq-model"), label="groq"), local)
+        groq_response = await ok.generate(MESSAGES)
+        self.assertEqual((groq_response.provider, groq_response.model), ("groq", "groq-model"))
+
+        failing = FallbackLLMProvider(provider("groq-model", error=RATE_LIMIT(), label="groq"), local)
+        with self.assertLogs("app.llm", "WARNING"):
+            switched = await failing.generate(MESSAGES)
+        self.assertEqual((switched.provider, switched.model), ("lm_studio", LOCAL_MODEL))  # the route that ran, not the primary
 
     async def test_rate_limit_triggers_exactly_one_local_attempt_without_waiting(self) -> None:
         wrapper, primary, local = self.pair(primary_error=RATE_LIMIT())
@@ -139,7 +152,7 @@ class FallbackSecurityAndCitationTests(unittest.IsolatedAsyncioTestCase):
         user = make_user()
         context = await build_context(FINANCE_RESULTS, user)
         primary = provider("groq-model", error=RATE_LIMIT())
-        local = provider(LOCAL_MODEL, result=completion("INR 1.5 crore【S1】, reviewed quarterly [S2], invented [S9].", LOCAL_MODEL))
+        local = provider(LOCAL_MODEL, result=completion("INR 1.5 crore【S1】, reviewed quarterly [S2], invented [S9].", LOCAL_MODEL), label="lm_studio")
         generator = AnswerGenerator(FallbackLLMProvider(primary, local))
 
         with self.assertLogs("app.llm", "WARNING"):
@@ -162,6 +175,7 @@ class FallbackSecurityAndCitationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.citation_check, "partial")
         self.assertNotIn("[S9]", result.answer)
         self.assertEqual(result.model, LOCAL_MODEL)
+        self.assertEqual(result.provider, "lm_studio")  # carried through the generation layer to the receipt
         self.assertIs(result.context, context)
         self.assertEqual([item.chunk_id for item in result.context.items], [r.chunk_id for r in FINANCE_RESULTS])
 
@@ -205,6 +219,7 @@ class FallbackConfigurationTests(unittest.TestCase):
         self.assertIsInstance(built, FallbackLLMProvider)
         primary, local = built._primary, built._fallback
         self.assertEqual((primary.model, local.model), (settings.llm_model, LOCAL_MODEL))
+        self.assertEqual((primary._provider_name, local._provider_name), ("groq", "lm_studio"))
         self.assertEqual((primary._client.max_retries, primary._rate_limit_max_wait), (0, 0.0))  # fail over at once
         self.assertEqual(str(local._client.base_url), "http://127.0.0.1:1235/v1/")
         self.assertEqual(local._client.api_key, "lm-studio")  # placeholder: no real key needed when auth is off

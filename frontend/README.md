@@ -48,11 +48,12 @@ Never put secrets in these files: every `VITE_*` value is embedded in the public
 | `/login` | public | Sign in (`POST /api/v1/auth/login`) |
 | `/app/dashboard` | signed in | Role-aware dashboard and application home (`GET /api/v1/dashboard/overview`) |
 | `/app/chat` | signed in | Secure AI assistant |
-| `/app/upload` | signed in; usable with `documents:write` | Upload a PDF (`POST /api/v1/documents/ingest`) |
-| `/app/upload-image` | signed in; usable with `documents:write` | Upload a PNG/JPEG for OCR (`POST /api/v1/documents/ingest-image`) |
+| `/app/upload` | signed in. `documents:write` uploads directly; `documents:submit` submits for CEO approval | Direct upload (`POST /api/v1/documents/ingest`) then chat, or submit a PDF and track it under "My submissions" |
+| `/app/upload-image` | signed in. `documents:write` uploads directly; `documents:submit` submits for CEO approval | Direct OCR upload (`POST /api/v1/documents/ingest-image`) then chat, or submit an image for review |
+| `/app/approvals` | listed only with `documents:approve` (the CEO) | The Document Approval Queue: preview, approve, reject, retry |
 | `/app/profile` | signed in | Identity, roles and permissions from `GET /api/v1/auth/me` |
 
-Route guards are UX only; every API call is authorized by the server. The Upload links and forms appear only for accounts whose `/auth/me` permissions include `documents:write` (SUPER_ADMIN only in the demo data); the backend enforces the permission on every upload. An uploaded document is readable only by its uploader until further grants are added.
+Route guards are UX only; every API call is authorized by the server. Accounts with `documents:write` (SUPER_ADMIN only in the demo data) get the direct upload forms and their documents become searchable at once, readable only by the uploader until further grants are added. Every other role holds `documents:submit` and sees the submit-for-approval page instead (nothing is searchable until the CEO approves and indexing completes). Accounts with neither permission see a locked page. The backend enforces each permission on every request.
 
 ## Backend contract
 
@@ -62,6 +63,8 @@ Route guards are UX only; every API call is authorized by the server. The Upload
 | `GET /api/v1/auth/me` | Current user (`id, email, full_name, roles, permissions`) |
 | `GET /api/v1/dashboard/overview` | Dashboard: one read-only call, no parameters. Sections the account may not read arrive as `null` and are not rendered; metrics with no stored source arrive in `unavailable` |
 | `POST /api/v1/assistant/query` | Chat: sends `{query, top_k: 5}` (the backend `RagQuery`) with the bearer token; returns `{status, answer, request_id, sources, unverified_source_numbers}` |
+| `POST /api/v1/assistant/document-query` | Document chat: `{document_id, query, history}` (history: at most 10 `user`/`assistant` turns, session-only). Same response as the assistant. 404 means missing or not readable (indistinguishable); 409 means not indexed yet |
+| `/api/v1/document-submissions` (`POST`, `GET /mine`, `GET /queue`, `GET /{id}/preview`, `POST /{id}/approve`, `POST /{id}/reject`) | Approval workflow. Submitting and "My submissions" need `documents:submit`; the queue, preview of others' files, approve and reject need `documents:approve`. A submission is not searchable until the server reports `ready`; the preview is fetched with the bearer token and shown from a temporary blob URL |
 | `POST /api/v1/documents/ingest` | PDF upload: multipart field `file`, up to 25 MB. Stores, chunks and embeds in one request; `embedding_status` (`completed`, `failed`, `not_configured`) and `embedding_model` say whether it is searchable |
 | `POST /api/v1/documents/ingest-image` | Image upload: multipart field `file`, PNG or JPEG up to 10 MB. Runs OCR, then stores, chunks and embeds in one request; returns `ocr_line_count`, `ocr_mean_confidence` and `embedding_status` (no `embedding_model`) |
 | `POST /api/v1/embeddings/documents/{document_id}` | Retry indexing for an already stored document (never re-uploads). Used only when `embedding_status` was not `completed` |

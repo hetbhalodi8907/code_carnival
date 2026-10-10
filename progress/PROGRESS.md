@@ -25,6 +25,29 @@ Part 6.3 (authenticated assistant query API): complete. Next task: awaiting inst
 
 ## Completed tasks
 
+### CEO approval workflow for PDF and image uploads (2026-10-10)
+
+- [x] Permissions `documents:submit` (all six roles) and `documents:approve` (SUPER_ADMIN only) via migration `d4a7f1c8e2b5` (additive, idempotent, reversible; grants by role name) and `demo_dataset/spec.py`. The direct `/documents/ingest*` endpoints still need `documents:write`.
+- [x] `document_submissions` table, quarantine storage (`QUARANTINE_STORAGE_PATH`, git-ignored, never served), `POST/GET /api/v1/document-submissions` (+ `/mine`, `/queue`, `/{id}/preview`, `/{id}/approve`, `/{id}/reject`). A pending, rejected or failed submission has no document, chunks, embeddings or grants.
+- [x] Approval locks the row (`FOR UPDATE`) and runs the EXISTING `ingest_pdf` / `ingest_image` + embedding code; a failure removes exactly that attempt's document and keeps the file for retry; documents are granted only to the submitter.
+- [x] Frontend: submit-for-approval page and "My submissions" for non-CEO roles, CEO "Approvals" queue with authenticated preview, approve, reject (reason) and retry; chat for approved documents.
+- [x] Applied to `rag_system_test` and `rag_system` (counts and checksums of existing data identical; permissions 11 -> 13, role grants 29 -> 36). Committed `dataset_manifest.json` regenerated (two permissions added).
+- [x] Tests: `backend/tests/test_document_approval.py` (24), `frontend/src/pages/ApprovalWorkflow.test.tsx` (17); three mutation checks fail the suite as intended; real-browser run of submit -> preview -> approve/reject -> chat on a real server and the test DB with a stand-in model.
+- [ ] Limits: the approved document is readable only by its submitter; a headless browser showed a blank PDF preview pane (no PDF viewer), so only the byte-identical delivery is verified.
+
+### Document chat on the upload pages (2026-10-10)
+
+- [x] `POST /api/v1/assistant/document-query` (`{document_id, query, history}`): token identity, `documents:read`, then `can_access_document` (404 identical for missing and unreadable), retrieval restricted to the document inside the same SQL as the grant check, existing generation, citation validation and TrustProof. History is bounded (10 turns, roles user/assistant only), quoted as non-evidence, source markers stripped, boundary token refused. Not indexed -> 409. No schema, migration or stored conversations.
+- [x] Frontend: reusable `DocumentChat` under the ready result on `/app/upload` and `/app/upload-image` (only after confirmed indexing); retry, New conversation, reset per document; OCR sources labelled "OCR text" with no page.
+- [x] Tests: `backend/tests/test_document_chat.py` (18; breaking the SQL scope fails 9, skipping the access check fails 6), `frontend/src/components/documents/DocumentChat.test.tsx` (13). Real-browser run on a real server and the test database with a stand-in model (no provider quota).
+- [ ] Not verified live: a real Groq answer through this endpoint (stand-in model only).
+
+### PDF ingestion hardening (2026-10-10)
+
+- [x] Traced upload -> validate -> extract -> chunk -> persist -> grant -> embed -> authorized retrieval -> assistant; the existing pipeline was correct end to end. Defects fixed: a text-less (scanned/blank) PDF was stored as "processed" with 0 chunks and reported as an embedding failure (now a 422 stating OCR is unsupported for PDFs, nothing stored); password-protected PDFs got a generic error (now explicit); no page cap (`MAX_PDF_PAGES`, default 500); overlong or path-like filenames (limit 255, stored as a harmless label); an unexpected exception while creating the embedding service turned a stored upload into a 500 (now reported as `embedding_status: failed`); embedding retries re-embedded every chunk (now only chunks without a vector from the current model, under a row lock so concurrent retries do not duplicate work).
+- [x] No migration, no schema change, no frontend change. `tests/test_pdf_robustness.py` (12 tests, offline embeddings, no LLM calls).
+- [ ] Not changed (by design): no content hash exists, so identical uploads are separate documents; `documents.status` is not an indexing state (derived from chunk embeddings); no OCR for PDFs.
+
 ### Role-aware dashboard (2026-10-10)
 
 - [x] `GET /api/v1/dashboard/overview` (`app/api/v1/dashboard.py`, `app/services/dashboard/service.py`, `app/schemas/dashboard.py`): read-only, database-side aggregation, no LLM, identity only from the verified token. Sections (`projects`, `finance`, `workforce`, `security`) are `null` unless the account holds the permission; documents are counted only through `document_access_condition`; the employee scope is projects they lead or are a member of; compensation is a record count only.

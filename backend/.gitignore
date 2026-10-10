@@ -4,3 +4,5 @@ __pycache__/
 *.py[cod]
 # Runtime copies written by the PDF ingestion pipeline (DOCUMENT_STORAGE_PATH).
 data/documents/
+# Files awaiting approval (QUARANTINE_STORAGE_PATH).
+data/quarantine/

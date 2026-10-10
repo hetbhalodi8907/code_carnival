@@ -17,16 +17,26 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.dependencies import PERMISSION_DENIED, require_permission
 from app.api.v1.embeddings import EMBEDDING_PROVIDER_FAILED, EMBEDDINGS_NOT_CONFIGURED
 from app.db.session import get_session_factory
-from app.schemas.rag import AssistantQueryResponse, AssistantSource, RagQuery
-from app.services.authorization import AuthenticatedUser
+from app.schemas.rag import (
+    DOCUMENT_CHAT_TOP_K,
+    MAX_QUERY_LENGTH,
+    AssistantQueryResponse,
+    AssistantSource,
+    DocumentQuery,
+    RagQuery,
+    TrustProof,
+)
+from app.services.authorization import AuthenticatedUser, can_access_document
 from app.services.embeddings.provider import EmbeddingConfigurationError, EmbeddingProviderError
 from app.services.embeddings.service import EmbeddingServiceError
 from app.services.llm.provider import LLMConfigurationError
 from app.services.rag.access_denial import ACCESS_DENIED_ANSWER, create_access_denial_probe
 from app.services.rag.context import ContextAccessDeniedError
+from app.services.rag.context import create_context_builder as create_document_context_builder
 from app.services.rag.unified import create_context_builder
 from app.services.rag.generation import (
     GenerationResult,
+    HistoryTurn,
     RagGenerationError,
     create_answer_generator,
     usable_items,
@@ -38,6 +48,11 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 logger = logging.getLogger("app.rag")
 
 LLM_NOT_CONFIGURED = "The language model is not configured."
+# Identical for a missing document and one the caller may not read, so existence is never revealed.
+DOCUMENT_NOT_FOUND = "The document was not found."
+DOCUMENT_NOT_READY = "This document is not indexed yet, so it cannot be searched."
+# A follow-up this short usually leans on the previous question ("explain that", "which page?").
+FOLLOW_UP_MAX_WORDS = 8
 
 # Generation failures keep their fixed, safe messages; only the HTTP status is chosen here.
 _GENERATION_FAILURE_STATUS = {
@@ -132,7 +147,105 @@ async def query_assistant(
         ):
             return _denied_response(request_id)
 
-    return _to_response(result, request_id)
+    return _to_response(result, request_id, user)
+
+
+@router.post(
+    "/document-query",
+    response_model=AssistantQueryResponse,
+    responses={
+        401: {"description": "Missing, malformed, invalid or expired bearer token, or an inactive account."},
+        403: {"description": "The account lacks the documents:read permission."},
+        404: {"description": "No such document, or the caller may not read it (the two are indistinguishable)."},
+        409: {"description": "The document exists for the caller but has no searchable (embedded) text yet."},
+        422: {"description": "Invalid body: blank or over-long question, malformed or over-long history, a system "
+              "role or any unknown field."},
+        429: {"description": "The language model's rate limit is in effect; retry shortly."},
+        502: {"description": "The embedding provider or the language model failed or returned an invalid answer."},
+        503: {"description": "The embedding provider or language model is not configured, or retrieval is unavailable."},
+        504: {"description": "The language model did not respond in time."},
+    },
+)
+async def query_document(
+    body: DocumentQuery,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_permission("documents", "read")),
+    session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
+) -> AssistantQueryResponse:
+    """Answer a question from ONE document the authenticated user may read.
+
+    The same pipeline as ``/assistant/query``, narrowed to one document at every layer: the caller's
+    read access to ``document_id`` is checked first (404 otherwise), retrieval is restricted to that
+    document inside the SQL that also applies the authorization predicate (before ranking and LIMIT),
+    and the model only ever sees chunks that query returned. Earlier chat turns are quoted as context
+    for follow-ups, are never evidence, and sessions are not stored. Structured records are not consulted.
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+    try:
+        generator = create_answer_generator()
+        builder = create_document_context_builder(session_factory)
+    except LLMConfigurationError:
+        raise _failure(status.HTTP_503_SERVICE_UNAVAILABLE, LLM_NOT_CONFIGURED, "llm_not_configured", request_id)
+    except EmbeddingConfigurationError:
+        raise _failure(
+            status.HTTP_503_SERVICE_UNAVAILABLE, EMBEDDINGS_NOT_CONFIGURED, "embeddings_not_configured", request_id
+        )
+
+    async with session_factory() as session:
+        readable = await can_access_document(session, user.id, body.document_id)
+    if not readable:
+        raise _failure(status.HTTP_404_NOT_FOUND, DOCUMENT_NOT_FOUND, "document_not_found", request_id)
+
+    query = RagQuery(query=body.query, top_k=DOCUMENT_CHAT_TOP_K)
+    history = tuple(HistoryTurn(turn.role, turn.content) for turn in body.history)
+    try:
+        context = await builder.build(
+            query,
+            user,
+            request_id=request_id,
+            document_id=body.document_id,
+            search_text=_follow_up_search_text(body),
+        )
+    except ContextAccessDeniedError:
+        raise _failure(status.HTTP_403_FORBIDDEN, PERMISSION_DENIED, "missing_permission", request_id)
+    except EmbeddingConfigurationError:
+        raise _failure(
+            status.HTTP_503_SERVICE_UNAVAILABLE, EMBEDDINGS_NOT_CONFIGURED, "embeddings_not_configured", request_id
+        )
+    except (EmbeddingProviderError, EmbeddingServiceError):
+        raise _failure(status.HTTP_502_BAD_GATEWAY, EMBEDDING_PROVIDER_FAILED, "embedding_provider_failed", request_id)
+    except VectorSearchExecutionError as exc:
+        raise _failure(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc), "retrieval_failed", request_id)
+    except VectorSearchError as exc:
+        raise _failure(422, str(exc), "retrieval_rejected", request_id)
+
+    if context.status == "no_authorized_context":
+        # The caller may read the document, yet none of its text is searchable: not embedded (yet).
+        raise _failure(status.HTTP_409_CONFLICT, DOCUMENT_NOT_READY, "document_not_indexed", request_id)
+
+    try:
+        result = await generator.generate(query, context, user=user, request_id=request_id, history=history)
+    except RagGenerationError as exc:
+        raise _failure(_GENERATION_FAILURE_STATUS[exc.category], str(exc), exc.category, request_id)
+
+    # Defence in depth: retrieval already guarantees this. A source from another document is a bug,
+    # and nothing from it may be returned.
+    if any(item.document_id != body.document_id for item in usable_items(result.context)):
+        logger.error("Document chat context escaped its document request_id=%s", request_id)
+        raise _failure(status.HTTP_500_INTERNAL_SERVER_ERROR, "An unexpected error occurred.", "scope_violation", request_id)
+    return _to_response(result, request_id, user)
+
+
+def _follow_up_search_text(body: DocumentQuery) -> str | None:
+    """What to embed for retrieval. A short follow-up borrows the latest earlier questions for topic words.
+
+    Only the user's earlier QUESTIONS are borrowed (never assistant text, which is not evidence), and the
+    current question comes first. Longer questions stand on their own.
+    """
+    earlier = [turn.content for turn in body.history if turn.role == "user"][-2:]
+    if not earlier or len(body.query.split()) > FOLLOW_UP_MAX_WORDS:
+        return None
+    return " ".join([body.query, *reversed(earlier)])[:MAX_QUERY_LENGTH]
 
 
 def _denied_response(request_id: str) -> AssistantQueryResponse:
@@ -154,7 +267,7 @@ def _failure(status_code: int, detail: str, reason: str, request_id: str) -> HTT
     return HTTPException(status_code=status_code, detail=detail)
 
 
-def _to_response(result: GenerationResult, request_id: str) -> AssistantQueryResponse:
+def _to_response(result: GenerationResult, request_id: str, user: AuthenticatedUser) -> AssistantQueryResponse:
     # Sources come from the server's authoritative context, never from the model's answer.
     cited = set(result.unverified_source_numbers)
     sources = (
@@ -183,4 +296,22 @@ def _to_response(result: GenerationResult, request_id: str) -> AssistantQueryRes
         unverified_source_numbers=list(result.unverified_source_numbers),
         rejected_source_numbers=list(result.rejected_source_numbers),
         citation_check=result.citation_check,
+        trust_proof=_trust_proof(result, user, len(sources)),
+    )
+
+
+def _trust_proof(result: GenerationResult, user: AuthenticatedUser, source_count: int) -> TrustProof | None:
+    """A receipt only for a generated answer whose context provably belongs to the requesting user.
+
+    ``result.context`` is the retrieval result the generator already required to be built for this
+    user and this question (a mismatch raises before any model call). It is re-checked here so the
+    claim is made from execution state at response time, never assumed.
+    """
+    if result.status != "answered" or not result.provider_called or result.context.user_id != user.id:
+        return None
+    return TrustProof(
+        authorization="access_controlled_retrieval",
+        authorized_source_count=source_count,
+        provider=result.provider,
+        model=result.model,
     )

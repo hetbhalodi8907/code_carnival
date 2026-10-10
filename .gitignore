@@ -27,6 +27,8 @@ coverage/
 
 # Runtime copies written by the PDF ingestion pipeline (DOCUMENT_STORAGE_PATH)
 backend/data/documents/
+# Files awaiting CEO approval (QUARANTINE_STORAGE_PATH)
+backend/data/quarantine/
 
 # Logs
 *.log

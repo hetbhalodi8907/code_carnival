@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppShell } from "@/components/layout/AppShell";
+import { ApprovalQueuePage } from "@/pages/ApprovalQueuePage";
 import { ChatPage } from "@/pages/ChatPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { ImageUploadPage } from "@/pages/ImageUploadPage";
@@ -20,6 +21,7 @@ export function AppRoutes() {
           <Route path="chat" element={<ChatPage />} />
           <Route path="upload" element={<UploadPage />} />
           <Route path="upload-image" element={<ImageUploadPage />} />
+          <Route path="approvals" element={<ApprovalQueuePage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Route>

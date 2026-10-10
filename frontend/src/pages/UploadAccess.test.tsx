@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { CurrentUser } from "@/types/api";
 import { FINANCE_MANAGER, calls, mockFetch, renderApp, signIn } from "@/test/utils";
 
-/** The demo roles as the server reports them: only SUPER_ADMIN holds documents:write. */
+/** Accounts holding NEITHER documents:write nor documents:submit (no real demo role is like this since the approval workflow). */
 const USERS: Record<string, CurrentUser> = {
   "Finance Manager": FINANCE_MANAGER,
   "HR Manager": {
@@ -28,8 +28,13 @@ const ADMIN: CurrentUser = {
   email: "ishaan.malhotra@nexora.example",
   full_name: "Ishaan Malhotra",
   roles: ["SUPER_ADMIN"],
-  permissions: ["documents:read", "documents:write", "hr:read", "finance:read"],
+  permissions: ["documents:read", "documents:write", "documents:submit", "documents:approve", "hr:read", "finance:read"],
 };
+
+/** The demo roles as the server reports them now: every role may submit; only SUPER_ADMIN may write and approve. */
+const SUBMITTERS: Record<string, CurrentUser> = Object.fromEntries(
+  Object.entries(USERS).map(([label, account]) => [label, { ...account, permissions: [...account.permissions, "documents:submit"] }]),
+);
 
 const PAGES = [
   { path: "/app/upload", link: "Upload", noun: "PDFs", name: "Upload" },
@@ -37,7 +42,7 @@ const PAGES = [
 ] as const;
 
 describe("upload navigation and locked state", () => {
-  describe.each(Object.entries(USERS))("%s (no documents:write)", (_label, account) => {
+  describe.each(Object.entries(USERS))("%s (no documents:submit and no documents:write)", (_label, account) => {
     it("sees both upload entries marked as locked", async () => {
       signIn();
       mockFetch({ "GET /api/v1/auth/me": { body: account } });
@@ -45,8 +50,8 @@ describe("upload navigation and locked state", () => {
 
       const nav = await screen.findByRole("navigation", { name: "Sections" });
       for (const { link } of PAGES) {
-        const entry = within(nav).getByRole("link", { name: new RegExp(`^${link} \\(locked: requires the documents:write permission\\)$`) });
-        expect(entry).toHaveAttribute("title", "Requires the documents:write permission");
+        const entry = within(nav).getByRole("link", { name: new RegExp(`^${link} \\(locked: requires the documents:submit permission\\)$`) });
+        expect(entry).toHaveAttribute("title", "Requires the documents:submit permission");
       }
       expect(within(nav).getByRole("link", { name: "Assistant" })).toBeInTheDocument();
     });
@@ -61,8 +66,7 @@ describe("upload navigation and locked state", () => {
 
       const locked = await screen.findByTestId("upload-locked");
       expect(locked).toHaveTextContent("Uploading isn't available for your account");
-      expect(locked).toHaveTextContent(`Uploading ${noun} requires the documents:write permission`);
-      expect(locked).toHaveTextContent("CEO / Super Admin account currently has it");
+      expect(locked).toHaveTextContent(`Submitting ${noun} requires the documents:submit permission`);
       // Nothing to upload with: no file input, no dropzone and no submit button.
       expect(document.querySelector("input[type=file]")).toBeNull();
       expect(screen.queryByLabelText(/choose a file/i)).not.toBeInTheDocument();
@@ -82,6 +86,32 @@ describe("upload navigation and locked state", () => {
 
       expect(await screen.findByTestId("upload-locked")).toBeInTheDocument();
       expect(screen.getByTestId("location")).toHaveTextContent(path);
+    });
+  });
+
+  describe.each(Object.entries(SUBMITTERS))("%s (documents:submit, no documents:write)", (_label, account) => {
+    it("sees both upload entries unlocked and the submit-for-approval page, never a direct-ingest form", async () => {
+      signIn();
+      const fetchMock = mockFetch({ "GET /api/v1/auth/me": { body: account }, "GET /api/v1/document-submissions/mine": { body: { submissions: [] } } });
+      const user = userEvent.setup();
+      renderApp("/app/chat");
+
+      const nav = await screen.findByRole("navigation", { name: "Sections" });
+      expect(nav).not.toHaveTextContent("locked");
+      expect(within(nav).queryByRole("link", { name: "Approvals" })).not.toBeInTheDocument(); // reviewing is the CEO's alone
+
+      for (const { link, path } of PAGES) {
+        await user.click(within(nav).getByRole("link", { name: link }));
+        expect(await screen.findByTestId("review-upload-page")).toBeInTheDocument();
+        expect(screen.getByTestId("location")).toHaveTextContent(path);
+        expect(screen.getByLabelText(/choose a file/i)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Submit for approval" })).toBeDisabled(); // until a file is chosen
+        expect(screen.queryByRole("button", { name: /^Upload and/ })).not.toBeInTheDocument();
+        expect(await screen.findByText("My submissions")).toBeInTheDocument();
+        expect(screen.queryByTestId("upload-locked")).not.toBeInTheDocument();
+      }
+      expect(calls(fetchMock, "POST", "/api/v1/documents/ingest")).toHaveLength(0);
+      expect(calls(fetchMock, "POST", "/api/v1/documents/ingest-image")).toHaveLength(0);
     });
   });
 

@@ -459,7 +459,10 @@ class GroundedGenerationTests(unittest.IsolatedAsyncioTestCase):
                 "/", "/api/v1/health", "/api/v1/ready", "/api/v1/auth/login", "/api/v1/auth/me",
                 "/api/v1/documents/preview", "/api/v1/documents/ingest", "/api/v1/documents/ingest-image",
                 "/api/v1/embeddings/documents/{document_id}", "/api/v1/search/vector",
-                "/api/v1/assistant/query", "/api/v1/dashboard/overview",
+                "/api/v1/assistant/query", "/api/v1/assistant/document-query", "/api/v1/dashboard/overview",
+                "/api/v1/document-submissions", "/api/v1/document-submissions/mine", "/api/v1/document-submissions/queue",
+                "/api/v1/document-submissions/{submission_id}", "/api/v1/document-submissions/{submission_id}/preview",
+                "/api/v1/document-submissions/{submission_id}/approve", "/api/v1/document-submissions/{submission_id}/reject",
             },
         )
 

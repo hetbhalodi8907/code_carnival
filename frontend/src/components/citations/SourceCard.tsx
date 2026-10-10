@@ -29,6 +29,8 @@ export function SourceCard({ source, expanded, onToggle, detailId }: SourceCardP
           <span className="text-[13.5px] font-semibold">{sourceLabel(source)}</span>
           {source.pageNumber !== null ? (
             <span className="font-mono text-[11.5px] text-subtle">p. {source.pageNumber}</span>
+          ) : source.sourceType === "image" ? (
+            <span className="font-mono text-[11.5px] text-subtle">OCR text</span>
           ) : null}
         </span>
         <ChevronDown
@@ -43,6 +45,7 @@ export function SourceCard({ source, expanded, onToggle, detailId }: SourceCardP
           className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border bg-surface-2 px-3.5 py-3 text-[13px] tabular-nums"
         >
           {source.pageNumber !== null ? <span>Page {source.pageNumber}</span> : null}
+          {source.pageNumber === null && source.sourceType === "image" ? <span>Text read from the image (OCR)</span> : null}
           <span title="Cosine similarity between the question and this passage (higher is closer). Not a confidence score.">
             Similarity {formatSimilarity(source.similarity)}
           </span>

@@ -1,21 +1,26 @@
 import { Banknote, Clock, PiggyBank, TrendingUp } from "lucide-react";
 
-import { BarList, EmptyNote, Gauge, MetricCard, Panel, StatusBadge, TD, TH, TableWrap } from "@/components/dashboard/primitives";
+import { BarList, EmptyNote, Gauge, MetricCard, Panel, SectionTitle, StatGrid, StatusBadge, TD, TH, TableWrap } from "@/components/dashboard/primitives";
 import { formatDate, formatMoney, formatMonth } from "@/lib/dashboardFormat";
 import type { ExpenseItem, FinanceCurrency, FinanceSection } from "@/types/dashboard";
+
+const CHART_HEIGHT = 112;
 
 function MonthlyChart({ currency, data }: { currency: string; data: FinanceCurrency["monthly_spend"] }) {
   if (data.length === 0) return <EmptyNote>No approved spending is recorded yet.</EmptyNote>;
   const max = Math.max(...data.map((m) => m.amount), 1);
   return (
-    <figure>
-      <div className="overflow-x-auto pb-1">
-        <ul className="flex h-44 min-w-max items-end gap-3 px-1" aria-label={`Approved monthly spending in ${currency}`}>
+    <figure className="m-0 rounded-lg border border-border bg-surface-2 px-3 pb-3 pt-4">
+      <div className="overflow-x-auto">
+        <ul className="m-0 flex min-w-full list-none items-end justify-around gap-1.5 p-0" aria-label={`Approved monthly spending in ${currency}`}>
           {data.map((m) => (
-            <li key={m.month} className="flex w-14 flex-col items-center justify-end gap-1">
-              <span className="text-[11px] tabular-nums text-muted-foreground">{formatMoney(m.amount, currency, true)}</span>
-              <div className="w-8 rounded-t-md bg-primary" style={{ height: `${Math.max(2, (m.amount / max) * 100)}px` }} aria-hidden="true" />
-              <span className="text-[11.5px] font-medium">{formatMonth(m.month)}</span>
+            <li key={m.month} className="flex min-w-[40px] flex-1 flex-col items-center gap-1.5">
+              <span className="text-[11px] font-medium tabular-nums text-muted-foreground">{formatMoney(m.amount, currency, true)}</span>
+              {/* The track makes every month the same width and height; the fill is the month's share of the largest month. */}
+              <div className="relative flex w-8 items-end overflow-hidden rounded-md bg-muted" style={{ height: CHART_HEIGHT }} aria-hidden="true">
+                <div className="w-full rounded-md bg-primary" style={{ height: Math.max(3, Math.round((m.amount / max) * CHART_HEIGHT)) }} />
+              </div>
+              <span className="text-xs font-medium">{formatMonth(m.month)}</span>
             </li>
           ))}
         </ul>
@@ -29,8 +34,8 @@ function CurrencyBlock({ block, single }: { block: FinanceCurrency; single: bool
   const c = block.currency;
   return (
     <div className="flex flex-col gap-5" data-testid={`finance-${c}`}>
-      {!single ? <h3 className="text-[14px] font-semibold">Amounts in {c} (never combined with other currencies)</h3> : null}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {!single ? <h3 className="text-sm font-semibold">Amounts in {c} <span className="font-normal text-muted-foreground">(never combined with other currencies)</span></h3> : null}
+      <StatGrid>
         <MetricCard label="Actual spend (approved)" value={formatMoney(block.actual_spend, c)} icon={Banknote} hint="Approved expenses only" />
         <MetricCard
           label="Approved budget"
@@ -52,22 +57,22 @@ function CurrencyBlock({ block, single }: { block: FinanceCurrency; single: bool
           tone={block.pending_count > 0 ? "warning" : "default"}
           hint={`${block.pending_count} pending ${block.pending_count === 1 ? "expense" : "expenses"}`}
         />
-      </div>
+      </StatGrid>
       <Gauge percent={block.utilization_percent} label="Budget utilization" />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid items-start gap-6 *:min-w-0 lg:grid-cols-2">
         <div>
-          <h3 className="mb-3 text-[13.5px] font-semibold">Monthly spending trend</h3>
+          <SectionTitle>Monthly spending trend</SectionTitle>
           <MonthlyChart currency={c} data={block.monthly_spend} />
         </div>
         <div>
-          <h3 className="mb-3 text-[13.5px] font-semibold">Spending by category</h3>
+          <SectionTitle>Spending by category</SectionTitle>
           <BarList rows={block.by_category.map((x) => ({ label: x.label, value: x.amount }))} format={(n) => formatMoney(n, c)} emptyText="No approved spending is recorded yet." />
         </div>
       </div>
       <div>
-        <h3 className="mb-2 text-[13.5px] font-semibold">Budget versus actual by project</h3>
+        <SectionTitle>Budget versus actual by project</SectionTitle>
         <TableWrap label={`Spending by project in ${c}`}>
-          <table className="w-full min-w-[560px]">
+          <table className="w-full min-w-[540px] border-collapse">
             <thead>
               <tr>
                 <th scope="col" className={TH}>Project</th>
@@ -81,7 +86,7 @@ function CurrencyBlock({ block, single }: { block: FinanceCurrency; single: bool
               {block.by_project.map((p) => (
                 <tr key={p.code}>
                   <td className={TD}>
-                    <span className="font-medium">{p.name}</span> <span className="text-xs text-subtle">{p.code}</span>
+                    <span className="font-medium">{p.name}</span> <span className="text-xs text-muted-foreground">{p.code}</span>
                   </td>
                   <td className={`${TD} text-right tabular-nums`}>{p.budget === null ? "Not available" : formatMoney(p.budget, c)}</td>
                   <td className={`${TD} text-right tabular-nums`}>{formatMoney(p.actual, c)}</td>
@@ -103,14 +108,14 @@ function RecentExpenses({ items }: { items: ExpenseItem[] }) {
   if (items.length === 0) return <EmptyNote>No expenses are recorded.</EmptyNote>;
   return (
     <TableWrap label="Recent expenses">
-      <table className="w-full min-w-[640px]">
+      <table className="w-full min-w-[620px] border-collapse">
         <thead>
           <tr>
             <th scope="col" className={TH}>Date</th>
             <th scope="col" className={TH}>Category</th>
             <th scope="col" className={TH}>Project</th>
             <th scope="col" className={`${TH} text-right`}>Amount</th>
-            <th scope="col" className={TH}>Status</th>
+            <th scope="col" className={`${TH} pl-6`}>Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -119,11 +124,11 @@ function RecentExpenses({ items }: { items: ExpenseItem[] }) {
               <td className={`${TD} whitespace-nowrap`}>{formatDate(e.expense_date)}</td>
               <td className={TD}>
                 {e.category}
-                {e.description ? <span className="block text-xs text-subtle">{e.description}</span> : null}
+                {e.description ? <span className="block text-xs text-muted-foreground">{e.description}</span> : null}
               </td>
               <td className={TD}>{e.project_code}</td>
               <td className={`${TD} text-right tabular-nums`}>{formatMoney(e.amount, e.currency)}</td>
-              <td className={TD}>
+              <td className={`${TD} pl-6`}>
                 <StatusBadge status={e.status} />
               </td>
             </tr>
@@ -146,7 +151,8 @@ export function FinancePanel({ data }: { data: FinanceSection }) {
           ))}
         </div>
       )}
-      <h3 className="mb-2 mt-8 text-[13.5px] font-semibold">Recent expenses</h3>
+      <div className="mt-8" />
+      <SectionTitle>Recent expenses</SectionTitle>
       <RecentExpenses items={data.recent_expenses} />
     </Panel>
   );

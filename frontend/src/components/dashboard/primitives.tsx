@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { Info } from "lucide-react";
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,15 +25,17 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <Card id={id} aria-labelledby={`${id}-title`} className={cn("scroll-mt-4", className)}>
-      <CardHeader className="flex flex-wrap items-start justify-between gap-2">
+    <Card id={id} aria-labelledby={`${id}-title`} className={cn("min-w-0 scroll-mt-4", className)}>
+      <CardHeader className="flex flex-wrap items-start justify-between gap-2 px-4 py-3.5 sm:px-5 sm:py-4">
         <div className="min-w-0">
-          <CardTitle id={`${id}-title`}>{title}</CardTitle>
-          {description ? <CardDescription>{description}</CardDescription> : null}
+          <CardTitle id={`${id}-title`} className="text-base">
+            {title}
+          </CardTitle>
+          {description ? <CardDescription className="mt-1 max-w-[72ch] leading-relaxed">{description}</CardDescription> : null}
         </div>
         {action}
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className="min-w-0 p-4 sm:p-5">{children}</CardContent>
     </Card>
   );
 }
@@ -45,15 +47,18 @@ export function MetricCard({
   hint,
   icon: Icon,
   tone = "default",
+  compact = false,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   icon: LucideIcon;
   tone?: "default" | "warning" | "danger";
+  /** A smaller value for text rather than a number (e.g. "4 pdf · 1 image"). */
+  compact?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-xs" data-testid="metric-card">
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-border bg-card p-4 shadow-xs" data-testid="metric-card">
       <div className="flex items-center gap-2 text-[12.5px] font-medium text-muted-foreground">
         <span
           className={cn(
@@ -67,9 +72,43 @@ export function MetricCard({
         </span>
         <span className="truncate">{label}</span>
       </div>
-      <div className="text-2xl font-semibold tracking-tight">{value}</div>
-      {hint ? <div className="text-xs text-subtle">{hint}</div> : null}
+      <div className={cn("break-words font-semibold tracking-tight", compact ? "text-lg leading-8" : "text-2xl")}>{value}</div>
+      {hint ? <div className="text-xs leading-snug text-muted-foreground">{hint}</div> : null}
     </div>
+  );
+}
+
+/** Columns per card count (literal strings so Tailwind can see them): a row is always filled or evenly split. */
+const STAT_COLUMNS: Record<number, string> = {
+  1: "",
+  2: "sm:grid-cols-2",
+  3: "sm:grid-cols-3",
+  4: "sm:grid-cols-2 xl:grid-cols-4",
+  5: "sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5",
+  6: "sm:grid-cols-3",
+};
+
+/**
+ * A responsive row of metric cards. The column count follows the number of cards, so three cards share one row
+ * and four form a 2x2 or 4x1 grid, instead of leaving an empty slot. Children may shrink (min-w-0) rather than
+ * stretching the page.
+ */
+export function StatGrid({ children, className }: { children: ReactNode; className?: string }) {
+  const count = Children.toArray(children).length;
+  return (
+    <div className={cn("grid grid-cols-1 gap-3 *:min-w-0", STAT_COLUMNS[count] ?? "sm:grid-cols-2 lg:grid-cols-3", className)}>
+      {children}
+    </div>
+  );
+}
+
+/** The label above a group of content inside a panel: one level below the panel title. */
+export function SectionTitle({ children, icon: Icon }: { children: ReactNode; icon?: LucideIcon }) {
+  return (
+    <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+      {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
+      {children}
+    </h3>
   );
 }
 
@@ -142,7 +181,7 @@ export function UnavailableList({ items }: { items: UnavailableMetric[] }) {
   return (
     <section aria-labelledby="unavailable-title" className="rounded-xl border border-dashed border-border-strong bg-surface-2 p-4">
       <h2 id="unavailable-title" className="flex items-center gap-2 text-[13.5px] font-semibold">
-        <Info className="size-4 text-subtle" aria-hidden="true" />
+        <Info className="size-4 text-muted-foreground" aria-hidden="true" />
         Not available in this deployment
       </h2>
       <ul className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -158,26 +197,37 @@ export function UnavailableList({ items }: { items: UnavailableMetric[] }) {
 
 export function TableWrap({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <div className="-mx-1 overflow-x-auto px-1" role="region" aria-label={label} tabIndex={0}>
+    <div
+      className={cn(
+        "max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-border",
+        // The first column stays visible while the rest scrolls sideways on narrow screens.
+        "[&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:z-[1] [&_td:first-child]:bg-card",
+        "[&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:z-[1] [&_th:first-child]:bg-surface-2",
+        "[&_tbody_tr:hover>*]:bg-muted/40",
+      )}
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+    >
       {children}
     </div>
   );
 }
 
-export const TH = "whitespace-nowrap px-2 py-2 text-left text-[11.5px] font-semibold uppercase tracking-[0.04em] text-subtle";
-export const TD = "px-2 py-2.5 align-top text-[13px]";
+export const TH = "whitespace-nowrap bg-surface-2 px-3 py-2.5 text-left text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground";
+export const TD = "bg-card px-3 py-2.5 align-top text-[13px] transition-colors";
 
 export function DashboardSkeleton() {
   const block = "animate-pulse rounded-xl bg-muted";
   return (
     <div role="status" aria-live="polite" aria-label="Loading dashboard" data-testid="dashboard-skeleton" className="flex flex-col gap-4">
       <span className="sr-only">Loading your dashboard…</span>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <StatGrid>
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className={cn(block, "h-[104px]")} />
         ))}
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      </StatGrid>
+      <div className="grid gap-4 *:min-w-0 lg:grid-cols-2">
         <div className={cn(block, "h-64")} />
         <div className={cn(block, "h-64")} />
       </div>

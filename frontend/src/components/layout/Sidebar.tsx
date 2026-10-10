@@ -50,7 +50,7 @@ export function Sidebar({ id, user, onLogout, open, onClose }: SidebarProps) {
       </div>
 
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto" aria-label="Sections">
-        {NAV_ITEMS.map(({ to, label, icon: Icon, requires }) => {
+        {NAV_ITEMS.filter((item) => !item.onlyWith || user.permissions.includes(item.onlyWith)).map(({ to, label, icon: Icon, requires }) => {
           const locked = Boolean(requires) && !user.permissions.includes(requires as string);
           return (
             <NavLink
@@ -60,9 +60,9 @@ export function Sidebar({ id, user, onLogout, open, onClose }: SidebarProps) {
               title={locked ? `Requires the ${requires} permission` : undefined}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-[9px] text-sm transition-colors",
+                  "relative flex items-center gap-2.5 rounded-lg px-2.5 py-[9px] text-sm transition-colors",
                   isActive
-                    ? "bg-primary-soft font-semibold text-primary"
+                    ? "bg-primary-soft font-semibold text-primary before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r-full before:bg-primary"
                     : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
                 )
               }

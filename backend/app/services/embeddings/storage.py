@@ -52,17 +52,24 @@ async def store_document_embeddings(
         if document_result.scalar_one_or_none() is None:
             raise DocumentNotFoundError("The document does not exist.")
 
+        # Lock only this document's chunk rows: a concurrent retry waits, then finds them embedded and
+        # does no provider work. Readers (vector search) are never blocked.
         chunks_result = await session.execute(
             select(models.DocumentChunk)
             .where(models.DocumentChunk.document_id == document_id)
             .order_by(models.DocumentChunk.chunk_index)
+            .with_for_update()
         )
         chunks = chunks_result.scalars().all()
         if not chunks:
             raise DocumentHasNoChunksError("The document has no chunks to embed.")
 
-        vectors = await service.embed_texts([chunk.content for chunk in chunks])
-        for chunk, vector in zip(chunks, vectors, strict=True):
+        # Only chunks without a vector from THIS model are embedded. A retry after a failure costs
+        # nothing for chunks that already have one; vectors from another model are not searchable
+        # under this model, so they are regenerated.
+        pending = [chunk for chunk in chunks if chunk.embedding is None or chunk.embedding_model != service.model]
+        vectors = await service.embed_texts([chunk.content for chunk in pending]) if pending else []
+        for chunk, vector in zip(pending, vectors, strict=True):
             chunk.embedding = vector
             chunk.embedding_model = service.model
 
@@ -81,7 +88,7 @@ async def store_document_embeddings(
     return EmbeddingStorageResult(
         document_id=document_id,
         chunks_processed=len(chunks),
-        embeddings_created=len(vectors),
+        embeddings_created=len(vectors),  # newly created now; 0 when every chunk was already embedded
         embedding_model=service.model,
         status="completed",
     )
@@ -121,6 +128,9 @@ async def embed_ingested_document(
     except EmbeddingConfigurationError:
         outcome: EmbeddingOutcome = "not_configured"
     except (EmbeddingProviderError, EmbeddingServiceError, EmbeddingStorageError):
+        outcome = "failed"
+    except Exception as exc:  # noqa: BLE001 - the upload is already stored; any other failure must not turn it into a 500
+        logger.error("Embedding failed unexpectedly error_type=%s", type(exc).__name__)
         outcome = "failed"
     else:
         return IngestEmbeddingResult("completed", result.embedding_model)

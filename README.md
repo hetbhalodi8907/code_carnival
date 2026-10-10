@@ -105,6 +105,58 @@ export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_sy
 .venv/bin/python scripts/generate_demo_dataset.py --with-embeddings
 ```
 
+## PDF ingestion lifecycle
+
+`POST /api/v1/documents/ingest` (requires `documents:write`) runs these steps in order. The uploader's identity comes only from the bearer token; nothing in the upload (form fields, filename) can set the owner, roles or grants.
+
+1. **Read and validate** (nothing is stored yet). At most `MAX_PDF_SIZE_MB` bytes are read. The filename must end in `.pdf` and be at most 255 characters; the declared type must be a PDF type; PyMuPDF must parse the file; it must have at least one page, at most `MAX_PDF_PAGES` (default 500), and not require a password. Any failure is a 400, 413 or 422 with a plain message and persists nothing.
+2. **Extract and chunk** page by page (PyMuPDF text, whitespace normalized, page numbers kept), with the configured `CHUNK_SIZE` / `CHUNK_OVERLAP`. A PDF that yields no text (scanned or image-only) is **rejected with a 422** that says OCR is not supported for PDFs; it is never stored as "processed". (Images can be uploaded on the image page, which runs OCR.)
+3. **Persist** the document, chunks and the uploader's explicit grant in one database transaction, and the original file under the server-generated name `<document uuid>.pdf`. The uploaded filename is only a label (directory parts and control characters removed). If the transaction fails, the transaction rolls back and the stored file is deleted; no other document, grant or file is touched. `(document_id, chunk_index)` is unique, so a document cannot hold duplicate chunks.
+4. **Embed** with the configured model. The upload is not undone if this fails: the response says `embedding_status` is `completed`, `failed` or `not_configured`. Until it is `completed`, the chunks have no vector for the current model, and retrieval only returns chunks that have one, so the document is stored but **not searchable**.
+
+**Recovery.** `POST /api/v1/embeddings/documents/{id}` retries step 4 without re-uploading. It locks only that document's chunk rows, embeds only chunks that lack a vector from the current model, and leaves the rest untouched, so a second retry (or a concurrent one) costs nothing and creates no duplicates. A provider failure rolls back and leaves existing vectors as they were.
+
+**Known limits.** The schema has no content hash, so uploading the same file twice creates two independent, separately granted documents (each without duplicate chunks). `documents.status` stays `processed` once chunks are stored; whether a document is searchable is derived from its chunk embeddings, not from that column. Extraction runs in the request (PyMuPDF is not thread-safe), bounded by the size and page limits.
+
+## CEO approval workflow (PDF and image uploads)
+
+Every demo role can **submit** a PDF or image for review; only the CEO / Super Admin decides. A submitted file is not a document until it is approved: it has no `documents` row, no chunks, no embeddings and no grant, so it cannot be searched, retrieved, cited or chatted with.
+
+| Permission | Who | Allows |
+|---|---|---|
+| `documents:submit` | all six demo roles | submit a file, list their own submissions |
+| `documents:approve` | SUPER_ADMIN only | see the queue, preview files, approve, reject |
+| `documents:write` | SUPER_ADMIN only (unchanged) | the direct `POST /documents/ingest`, `/ingest-image`, `/preview` endpoints |
+
+1. **Submit** (`POST /api/v1/document-submissions`, multipart `file`). The existing validators run first (PDF: extension, type, structure, page limit, password-protected rejected, extractable text required; image: extension, declared type, signature, decodable, `MAX_IMAGE_PIXELS`) plus the size limits. Rejected files are never stored. A valid file goes to **quarantine** (`QUARANTINE_STORAGE_PATH`, default `data/quarantine`, git-ignored, never served, files `0600`, named by a generated UUID) and a `document_submissions` row is created as `pending_approval`. At most `MAX_PENDING_SUBMISSIONS_PER_USER` (20) may wait per user.
+2. **Review** (CEO only): `GET /document-submissions/queue`, and `GET /document-submissions/{id}/preview`, which streams the quarantined file through the authenticated API (fixed filename, `nosniff`, `no-store`; no public URL). The submitter may preview their own file; everyone else gets the same 404 as for a missing ID.
+3. **Approve** (`POST /document-submissions/{id}/approve`). The row is locked and moved to `indexing` so concurrent or repeated approvals cannot ingest the file twice. The **existing** `ingest_pdf` / `ingest_image` and embedding code then run (extraction or OCR, chunking, persistence, embeddings). The document is owned by, and granted only to, the **submitter** (the existing uploader-only policy): approval does not widen access, and the CEO gets no hidden grant. On success the status is `ready`, the quarantine file is deleted and the submitter can chat with it from "My submissions".
+4. **Failure.** If ingestion, OCR or indexing fails, exactly that attempt's document ID (with its chunks, grant and stored copy) is removed, the quarantine file and the submission are kept, and the status is `failed` with a fixed message. Calling approve again retries; a crashed attempt is cleaned by exact ID before the next one (an `indexing` row untouched for `SUBMISSION_STALE_MINUTES`, default 10, can be reclaimed).
+5. **Reject** (`POST /document-submissions/{id}/reject`, optional `reason` up to 300 characters). The file is deleted, nothing is ever indexed, and only the decision metadata (who, when, reason) is kept. The submitter sees "Rejected" and the reason.
+
+Statuses: `pending_approval`, `indexing` (shown as "Approved · Indexing"), `ready` ("Ready to search"), `rejected`, `failed`. `GET /document-submissions/mine` returns only the caller's own submissions.
+
+**Setup** (from `backend/`; additive, reversible with `alembic downgrade c3f6e9b2d5a4`; check the printed database name first):
+
+```bash
+export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/rag_system
+.venv/bin/alembic upgrade head   # table + documents:submit/approve, granted by role name; roles that do not exist are skipped
+```
+
+Restart the backend afterwards. In the UI: non-CEO accounts see the submit-for-approval page on Upload and Upload images (with "My submissions"); the CEO keeps the direct upload forms and gets an **Approvals** entry. **Limits:** after approval the document is readable only by its submitter (granting others is not part of this feature); the CEO's preview shows the file itself, never extracted or OCR text; approval runs inside the request, so a large image can take several seconds.
+
+## Chat with an uploaded document
+
+After a PDF (`/app/upload`) or an image (`/app/upload-image`) is **confirmed indexed**, a "Chat with this document" panel appears under the upload result. It is a real conversation with that one document: ask a question, get an answer with sources, ask follow-ups. If indexing failed or was not configured, the existing retry state is shown and there is no chat.
+
+`POST /api/v1/assistant/document-query` takes `{document_id, query, history}` and returns the same response as `/assistant/query` (status, answer, sources, `citation_check`, `trust_proof`). It carries no identity or permission.
+
+- **Scope and authorization.** The user comes from the bearer token and needs `documents:read`. The server then checks that this user may read `document_id` (the existing grant rule). A missing document and one the user may not read return the **same 404** ("The document was not found."), so nothing about the file is revealed. Retrieval is restricted to that document inside the SQL statement that also applies the grant check, so it runs before ranking and `LIMIT`; the model only sees chunks that statement returned. A document the caller can read but that has no embeddings yet returns 409. Structured records are not consulted, and no access-denied probe runs.
+- **Follow-ups.** The page sends up to 10 recent turns (user and assistant roles only; a `system` role or any extra field is rejected with 422, each turn at most 4,000 characters and 16,000 in total). The server quotes them in the prompt as "not evidence" context, removes earlier `[S#]` markers from them (those numbers mean something else in a new turn) and refuses a history containing the source-boundary token. Every question is retrieved again from the document; for a short question (8 words or fewer) the earlier user questions are added to the text that is embedded, so "which page supports that?" still finds the right passage. Citations are validated against the sources of the current turn only.
+- **Session only.** History lives in the page's memory. It is cleared by "New conversation", by uploading another file (a different document is a different conversation) and by leaving the page. Nothing is stored on the server and there is no migration.
+- **PDF and OCR.** PDF answers cite real pages. OCR sources show "OCR text" and never a page number. OCR runs once at upload, never per question.
+- **Failures.** A rate limit (429), timeout or provider error shows the existing retry state with the question kept; nothing is sent twice automatically. Insufficient information keeps its established card and is never shown as a denial.
+
 ## Frontend (demo-ready)
 
 `frontend/` contains the React + TypeScript + Tailwind + shadcn/ui client: login, a protected app shell with the signed-in user's role, the secure AI chat (grounded answers with the sources retrieved for them, insufficient-context and no-authorized-context states, and safe errors), a profile page, and dark/light themes. It consumes only the existing backend APIs and makes no access decisions. Run it with `cd frontend && npm install && npm run dev` (it proxies `/api` to `localhost:8000`). See [frontend/README.md](frontend/README.md) and [frontend/DESIGN_SYSTEM.md](frontend/DESIGN_SYSTEM.md).
@@ -279,7 +331,7 @@ The inactive demo user (`farhan.qureshi@nexora.example`) can never sign in. Send
 | `GET /api/v1/auth/me` | authenticated; identity, roles and permissions from the database |
 | `POST /api/v1/search/vector` | `documents:read`; results limited to the caller's authorized documents |
 | `POST /api/v1/assistant/query` | `documents:read`; answers only from the caller's authorized documents |
-| `POST /api/v1/documents/preview`, `POST /api/v1/documents/ingest` | `documents:write` (SUPER_ADMIN in the demo dataset); the uploader receives an explicit grant to the new document |
+| `POST /api/v1/documents/preview`, `POST /api/v1/documents/ingest`, `/ingest-image` | `documents:write` (SUPER_ADMIN in the demo dataset); the uploader receives an explicit grant to the new document. Everyone else submits through `/document-submissions` for CEO approval |
 | `POST /api/v1/embeddings/documents/{id}` | `documents:write` **and** access to that document; otherwise 404, the same as a missing document |
 
 Missing, malformed, tampered or expired tokens, and tokens of deactivated users, get **401** with `WWW-Authenticate: Bearer`. Missing permissions get **403**. Invalid credentials and inactive accounts get the same **401** "Invalid email or password."

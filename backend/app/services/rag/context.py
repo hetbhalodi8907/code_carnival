@@ -45,6 +45,7 @@ class SecureSearch(Protocol):
         top_k: int,
         embedding_service: EmbeddingService,
         user_id: UUID,
+        document_id: UUID | None = None,
     ) -> list[VectorSearchResult]: ...
 
 
@@ -228,8 +229,14 @@ class ContextBuilder:
         user: AuthenticatedUser,
         *,
         request_id: str | None = None,
+        document_id: UUID | None = None,
+        search_text: str | None = None,
     ) -> RetrievalContext:
         """Retrieve the user's authorized chunks for ``query`` and structure them.
+
+        ``document_id`` restricts retrieval to one document (still only if the user may read it).
+        ``search_text`` replaces the text that is EMBEDDED for the search (used for short follow-up
+        questions); the context and the generated answer still belong to ``query`` itself.
 
         Embedding-provider and search failures propagate unchanged: they are errors, not
         an empty context. An empty context means retrieval succeeded with no authorized
@@ -246,11 +253,14 @@ class ContextBuilder:
             raise ContextAccessDeniedError("The user may not read documents.")
 
         started = time.perf_counter()
+        # Only passed when set, so every existing search implementation keeps its signature.
+        scope = {} if document_id is None else {"document_id": document_id}
         results = await self._search.search_text(
-            query.query,
+            search_text or query.query,
             top_k=query.top_k,
             embedding_service=self._embedding_service,
             user_id=user.id,
+            **scope,
         )
         context = _assemble(query, user.id, results, self._max_context_characters)
         # Counts only: never the question, chunk text or the context itself.

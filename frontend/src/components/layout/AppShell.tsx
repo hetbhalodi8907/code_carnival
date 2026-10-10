@@ -30,7 +30,7 @@ export function AppShell() {
 
   if (!user) return null;
   return (
-    <div className="grid h-full grid-cols-1 grid-rows-[minmax(0,1fr)] overflow-hidden md:grid-cols-[248px_minmax(0,1fr)]">
+    <div className="grid h-full grid-cols-1 grid-rows-[minmax(0,1fr)] overflow-hidden md:grid-cols-[212px_minmax(0,1fr)] lg:grid-cols-[248px_minmax(0,1fr)]">
       <Sidebar id={sidebarId} user={user} onLogout={logout} open={drawerOpen} onClose={closeDrawer} />
       {drawerOpen ? (
         <div className="fixed inset-0 z-[60] bg-[rgb(16_24_40/0.4)] md:hidden" onClick={closeDrawer} aria-hidden="true" />

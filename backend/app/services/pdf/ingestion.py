@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -10,6 +11,22 @@ from app.models import Document, DocumentChunk, DocumentUserAccess
 from app.services.pdf.chunker import chunk_pdf_pages
 from app.services.pdf.extractor import PDFExtractionError, extract_pdf_pages
 from app.services.pdf.validator import PDFValidationError, validate_pdf_upload
+
+
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+NO_TEXT_MESSAGE = (
+    "The PDF contains no extractable text, so it was not stored. It may be a scanned or image-only PDF: "
+    "OCR is not supported for PDFs."
+)
+
+
+def display_name(filename: str) -> str:
+    """The uploaded name as harmless metadata: no directory part, no control characters.
+
+    It is only ever a label. Stored files are named by the server-generated document UUID.
+    """
+    name = _CONTROL_CHARACTERS.sub("", filename.replace("\\", "/").rsplit("/", 1)[-1]).strip()
+    return name[:300] or "document"
 
 
 class PDFIngestionError(RuntimeError):
@@ -66,6 +83,9 @@ async def ingest_pdf(
         )
     except (PDFValidationError, PDFExtractionError, ValueError) as exc:
         raise PDFIngestionError(str(exc)) from exc
+    if not chunks:
+        # Never store a document that can never be searched and report it as processed.
+        raise PDFIngestionError(NO_TEXT_MESSAGE)
 
     return await persist_document(
         filename=filename,
@@ -99,6 +119,7 @@ async def persist_document(
     Shared by PDF and image (OCR) ingestion. Access is default deny: the only grant created
     is the uploader's own (``owner_user_id``), in the same transaction.
     """
+    filename = display_name(filename)
     if document_id is None:
         document_id = uuid4()
     source_path = f"{document_id}{extension}"

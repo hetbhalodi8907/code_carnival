@@ -19,12 +19,13 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.main import app
 from app.models.document_chunk import EMBEDDING_VECTOR_DIMENSION
-from app.schemas.rag import AssistantQueryResponse, MAX_QUERY_LENGTH
+from app.schemas.rag import AssistantQueryResponse, MAX_QUERY_LENGTH, TrustProof
 from app.services.authorization import load_authenticated_user
 from app.services.embeddings.provider import EmbeddingProvider, EmbeddingProviderError
 from app.services.embeddings.service import EmbeddingService
 from app.services.llm.provider import LLMProvider, LLMProviderError, LLMProviderTimeoutError, LLMResponse
 from app.services.rag.context import ContextBuilder
+from app.api.v1.assistant import _to_response
 from app.services.rag.generation import (
     INSUFFICIENT_CONTEXT_ANSWER,
     NO_CONTEXT_ANSWER,
@@ -47,7 +48,7 @@ INACTIVE = "farhan.qureshi@nexora.example"
 FINANCE_QUESTION = "What is the Finance department budget?"
 FAKE_KEY = "gsk_test_placeholder_not_a_real_key"
 RESPONSE_FIELDS = {"status", "answer", "request_id", "sources", "unverified_source_numbers",
-                   "rejected_source_numbers", "citation_check"}
+                   "rejected_source_numbers", "citation_check", "trust_proof"}
 SOURCE_FIELDS = {"source_number", "document_id", "document_title", "chunk_id", "page_number",
                  "source_locator", "similarity", "source_type", "cited"}
 
@@ -501,6 +502,66 @@ class AssistantQueryApiTests(DemoDatasetTestCase):
 
     # ---- G. contract and regression -----------------------------------------------------------------
 
+    # ---- TrustProof receipt -------------------------------------------------------------------------------
+
+    async def test_an_answer_carries_a_trust_proof_backed_by_the_executed_route(self) -> None:
+        self.provider.response = LLMResponse("The Finance budget is INR 1.5 crore [S1].", "qwen/qwen3.5-9b", "stop", 90, 9, provider="lm_studio")
+        status, _, body = await self.ask(self.headers_for(FINANCE_MANAGER), {"query": FINANCE_QUESTION})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(
+            body["trust_proof"],
+            {"authorization": "access_controlled_retrieval", "authorized_source_count": len(body["sources"]),
+             "provider": "lm_studio", "model": "qwen/qwen3.5-9b"},
+        )
+        self.assertGreater(len(body["sources"]), 0)
+        self.assertEqual(body["citation_check"], "passed")
+        TrustProof.model_validate(body["trust_proof"])
+        # The receipt is metadata only: no prompt, completion, passage text or identifiers.
+        serialized = json.dumps(body["trust_proof"])
+        for item in self.generations()[-1][1].items:
+            self.assertNotIn(item.content[:60], serialized)
+            self.assertNotIn(str(item.document_id), serialized)
+        self.assertNotIn(body["answer"], serialized)
+
+    async def test_the_receipt_counts_only_the_final_sources_returned(self) -> None:
+        status, _, body = await self.ask(self.headers_for(KABIR), {"query": "What is the code review process?", "top_k": 2})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["trust_proof"]["authorized_source_count"], len(body["sources"]))
+        self.assertLessEqual(len(body["sources"]), 2)
+
+    async def test_partial_citations_are_reported_honestly_and_an_unknown_provider_stays_unknown(self) -> None:
+        self.provider.response = LLMResponse("Budget is INR 1.5 crore [S1] and also [S9].", "fake-llm", "stop", 90, 9)
+        status, _, body = await self.ask(self.headers_for(FINANCE_MANAGER), {"query": FINANCE_QUESTION})
+        self.assertEqual(status, 200, body)
+        self.assertEqual((body["citation_check"], body["rejected_source_numbers"]), ("partial", [9]))
+        self.assertEqual((body["trust_proof"]["provider"], body["trust_proof"]["model"]), (None, "fake-llm"))  # not guessed
+
+    async def test_no_receipt_unless_the_answer_was_generated(self) -> None:
+        self.provider.response = LLMResponse("INSUFFICIENT_CONTEXT", "m", "stop", 1, 1)
+        _, _, insufficient = await self.ask(self.headers_for(FINANCE_MANAGER), {"query": "What is the parental leave?"})
+        self.assertEqual((insufficient["status"], insufficient["trust_proof"]), ("insufficient_context", None))
+        self.search_override = StubSearch([])
+        _, _, nothing = await self.ask(self.headers_for(FINANCE_MANAGER), {"query": "What is the office holiday calendar?"})
+        self.assertEqual((nothing["status"], nothing["trust_proof"]), ("no_authorized_context", None))
+
+    async def test_a_failed_request_returns_an_error_envelope_never_a_receipt(self) -> None:
+        for error in (LLMProviderError("boom"), LLMProviderTimeoutError("slow")):
+            self.provider.error = error
+            status, body = await self.ask_failing(self.headers_for(FINANCE_MANAGER), {"query": FINANCE_QUESTION})
+            self.assertGreaterEqual(status, 500)
+            self.assertNotIn("trust_proof", body)
+            self.assertNotIn("answer", body)
+
+    async def test_authorization_is_not_claimed_for_a_context_built_for_someone_else(self) -> None:
+        self.provider.response = LLMResponse("Budget [S1].", "m", "stop", 1, 1, provider="groq")
+        await self.ask(self.headers_for(FINANCE_MANAGER), {"query": FINANCE_QUESTION})
+        (query, context, user), = self.generations()
+        result = await AnswerGenerator(self.provider).generate(query, context, user=user)
+        self.assertEqual(_to_response(result, "rid", user).trust_proof.authorization, "access_controlled_retrieval")
+        async with self.session_factory() as session:
+            stranger = await load_authenticated_user(session, self.user_id(KABIR))
+        self.assertIsNone(_to_response(result, "rid", stranger).trust_proof)  # context.user_id != caller: no claim
+
     async def test_openapi_documents_only_the_authenticated_post_endpoint(self) -> None:
         spec = app.openapi()
         self.assertEqual(
@@ -508,7 +569,10 @@ class AssistantQueryApiTests(DemoDatasetTestCase):
             {"/", "/api/v1/health", "/api/v1/ready", "/api/v1/auth/login", "/api/v1/auth/me",
              "/api/v1/documents/preview", "/api/v1/documents/ingest", "/api/v1/documents/ingest-image",
              "/api/v1/embeddings/documents/{document_id}",
-             "/api/v1/search/vector", "/api/v1/dashboard/overview", PATH},
+             "/api/v1/search/vector", "/api/v1/dashboard/overview", "/api/v1/assistant/document-query",
+             "/api/v1/document-submissions", "/api/v1/document-submissions/mine", "/api/v1/document-submissions/queue",
+             "/api/v1/document-submissions/{submission_id}", "/api/v1/document-submissions/{submission_id}/preview",
+             "/api/v1/document-submissions/{submission_id}/approve", "/api/v1/document-submissions/{submission_id}/reject", PATH},
         )
         operation = spec["paths"][PATH]
         self.assertEqual(list(operation), ["post"])

@@ -66,7 +66,7 @@ class DatasetSpecificationTests(unittest.TestCase):
     def test_dataset_size_and_unique_natural_keys(self) -> None:
         self.assertEqual(len(DEPARTMENTS), 5)
         self.assertEqual({role.name for role in ROLES}, EXPECTED_ROLES)
-        self.assertEqual(len(PERMISSIONS), 11)
+        self.assertEqual(len(PERMISSIONS), 13)
         self.assertTrue(15 <= len(USERS) <= 25)
         self.assertTrue(7 <= len(DOCUMENTS) <= 10)
 
@@ -262,7 +262,7 @@ class DemoDatasetDatabaseTests(unittest.IsolatedAsyncioTestCase):
         ids = demo_ids()
         self.assertEqual(await self.count(models.Department, ids["departments"]), 5)
         self.assertEqual(await self.count(models.Role, ids["roles"]), 6)
-        self.assertEqual(await self.count(models.Permission, ids["permissions"]), 11)
+        self.assertEqual(await self.count(models.Permission, ids["permissions"]), 13)
         self.assertEqual(await self.count(models.User, ids["users"]), len(USERS))
         self.assertEqual(await self.count(models.Document, ids["documents"]), len(DOCUMENTS))
         self.assertEqual(report.counts["documents"].created, len(DOCUMENTS))

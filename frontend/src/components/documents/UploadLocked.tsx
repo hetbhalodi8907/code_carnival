@@ -5,9 +5,9 @@ import { StateBlock } from "@/components/feedback/StateBlock";
 import { Button } from "@/components/ui/button";
 
 /**
- * Shown on an upload page instead of the form when the signed-in account lacks documents:write.
- * It is a courtesy, not a security boundary: the server checks the permission on every upload
- * request. No upload control is rendered here.
+ * Shown on an upload page instead of the form when the signed-in account can neither upload directly
+ * (documents:write) nor submit for approval (documents:submit). It is a courtesy, not a security boundary:
+ * the server checks the permission on every request. No upload control is rendered here.
  */
 export function UploadLocked({ kind }: { kind: "PDFs" | "images" }) {
   return (
@@ -22,11 +22,10 @@ export function UploadLocked({ kind }: { kind: "PDFs" | "images" }) {
               <Link to="/app/chat">Back to the assistant</Link>
             </Button>
           }
-          hint="This page only explains the restriction. The server checks the documents:write permission on every upload request."
+          hint="This page only explains the restriction. The server checks the documents:submit permission on every submission."
         >
-          Uploading {kind} requires the documents:write permission, which this account does not have. In the demo,
-          the CEO / Super Admin account currently has it. This account can still ask the assistant about documents it
-          has been granted access to.
+          Submitting {kind} requires the documents:submit permission, which this account does not have. This account can
+          still ask the assistant about documents it has been granted access to.
         </StateBlock>
       </div>
     </div>

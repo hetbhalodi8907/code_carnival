@@ -1,4 +1,4 @@
-import { FileUp, ImageUp, LayoutDashboard, MessagesSquare, UserRound, type LucideIcon } from "lucide-react";
+import { ClipboardCheck, FileUp, ImageUp, LayoutDashboard, MessagesSquare, UserRound, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   to: string;
@@ -12,6 +12,8 @@ export interface NavItem {
    * accounts without it see a lock and a locked page (the server still enforces the permission).
    */
   requires?: string;
+  /** The entry is listed only for accounts that hold this permission (it is not offered to everyone else). */
+  onlyWith?: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -23,7 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: FileUp,
     title: "Upload Documents",
     crumb: "Add PDFs to the knowledge base",
-    requires: "documents:write",
+    requires: "documents:submit",
   },
   {
     to: "/app/upload-image",
@@ -31,7 +33,15 @@ export const NAV_ITEMS: NavItem[] = [
     icon: ImageUp,
     title: "Upload Images",
     crumb: "Read text from scanned images (OCR)",
-    requires: "documents:write",
+    requires: "documents:submit",
+  },
+  {
+    to: "/app/approvals",
+    label: "Approvals",
+    icon: ClipboardCheck,
+    title: "Document Approval Queue",
+    crumb: "Review submitted PDFs and images",
+    onlyWith: "documents:approve",
   },
   { to: "/app/profile", label: "Profile", icon: UserRound, title: "Profile & session", crumb: "Account and access" },
 ];

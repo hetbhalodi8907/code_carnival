@@ -14,6 +14,7 @@ EXPECTED_TABLES = {
     "departments",
     "document_chunks",
     "document_role_access",
+    "document_submissions",
     "document_user_access",
     "documents",
     "employee_compensation",

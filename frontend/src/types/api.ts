@@ -61,6 +61,37 @@ export interface AssistantSource {
   source_locator: string | null;
   /** Cosine similarity of the passage to the question; not a confidence score. */
   similarity: number;
+  /** "pdf" or "image" (OCR text). Optional: absent from older servers. */
+  source_type?: string;
+}
+
+/** One earlier turn of a document chat. Only these two roles exist; the server rejects anything else. */
+export interface ChatTurnPayload {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** POST /api/v1/assistant/document-query. Identity comes from the bearer token; the server checks access to the document. */
+export interface DocumentQueryRequest {
+  document_id: string;
+  query: string;
+  /** At most 10 recent turns. Context for follow-ups only, never evidence. */
+  history: ChatTurnPayload[];
+}
+
+/** The server's citation validation result: passed, partial (markers removed), none (cites nothing), not_applicable. */
+export type CitationCheck = "passed" | "partial" | "none" | "not_applicable";
+
+/**
+ * What the server can substantiate about an answered query (backend TrustProof). Metadata only; it never
+ * carries prompts, answers, passage text or hidden-source information.
+ */
+export interface TrustProofPayload {
+  authorization: "access_controlled_retrieval";
+  /** Number of final sources returned in `sources`. */
+  authorized_source_count: number;
+  provider: string | null;
+  model: string | null;
 }
 
 export interface AssistantQueryResponse {
@@ -72,6 +103,12 @@ export interface AssistantQueryResponse {
   sources: AssistantSource[];
   /** The model's own [S<n>] references. UNVERIFIED until citation validation (backend Part 7). */
   unverified_source_numbers: number[];
+  /** Numbers the model cited that matched no retrieved source (removed from the answer). Optional: absent from older servers. */
+  rejected_source_numbers?: number[];
+  /** Optional: absent from older servers. */
+  citation_check?: CitationCheck;
+  /** Present only for "answered"; null otherwise. Absent from older servers. */
+  trust_proof?: TrustProofPayload | null;
 }
 
 /**

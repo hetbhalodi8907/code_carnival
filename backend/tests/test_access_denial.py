@@ -34,7 +34,7 @@ KABIR = "kabir.sethi@nexora.example"
 HR_QUESTION = "What are the confidential HR salary bands and escalation process?"
 FINANCE_QUESTION = "What is the Finance department budget?"
 RESPONSE_FIELDS = {"status", "answer", "request_id", "sources", "unverified_source_numbers",
-                   "rejected_source_numbers", "citation_check"}
+                   "rejected_source_numbers", "citation_check", "trust_proof"}
 
 
 class RecordingProvider(LLMProvider):
@@ -134,6 +134,7 @@ class AccessDenialApiTests(DemoDatasetTestCase):
                 self.assertEqual(set(body), RESPONSE_FIELDS)
                 self.assertEqual((body["sources"], body["unverified_source_numbers"], body["rejected_source_numbers"]), ([], [], []))
                 self.assertEqual(body["citation_check"], "not_applicable")
+                self.assertIsNone(body["trust_proof"])  # a denial carries no receipt, counts or provider details
                 serialized = json.dumps(body)
                 self.assertNotIn(restricted_file, serialized)
                 self.assertNotIn(str(self.document_id(restricted_file)), serialized)
@@ -164,6 +165,7 @@ class AccessDenialApiTests(DemoDatasetTestCase):
                 body = await self.ask(email, question)
                 self.assertEqual((body["status"], body["answer"]), ("insufficient_context", INSUFFICIENT_CONTEXT_ANSWER))
                 self.assertEqual(body["sources"], [])
+                self.assertIsNone(body["trust_proof"])  # never a receipt, and never a denial, for "insufficient"
         self.assertEqual(self.probe_calls, len(questions))
 
     # ---- policy signal: confidential compensation ------------------------------------------------
@@ -205,6 +207,7 @@ class AccessDenialApiTests(DemoDatasetTestCase):
         )
 
         self.assertEqual(status, 429, body)
+        self.assertNotIn("trust_proof", body)  # an error is never a receipt
         self.assertNotIn("access_denied", json.dumps(body))
         self.assertNotIn("quota detail", json.dumps(body))
         self.assertEqual(self.probe_calls, 0)

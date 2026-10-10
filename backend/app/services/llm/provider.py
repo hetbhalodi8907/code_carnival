@@ -58,6 +58,8 @@ class LLMResponse:
     finish_reason: str | None
     prompt_tokens: int | None
     completion_tokens: int | None
+    provider: str | None = None
+    """Identifier of the provider that produced this response ("groq", "lm_studio"); None if unknown."""
 
 
 class LLMProvider(ABC):
@@ -88,6 +90,7 @@ class OpenAICompatibleLLMProvider(LLMProvider):
         temperature: float,
         max_tokens: int,
         rate_limit_max_wait_seconds: float | None = None,
+        provider_name: str | None = None,
     ) -> None:
         if not model.strip():
             raise ValueError("LLM model must not be empty.")
@@ -98,6 +101,7 @@ class OpenAICompatibleLLMProvider(LLMProvider):
             settings.llm_rate_limit_max_wait_seconds if rate_limit_max_wait_seconds is None else rate_limit_max_wait_seconds
         )
         self._client = client
+        self._provider_name = provider_name
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
@@ -140,7 +144,7 @@ class OpenAICompatibleLLMProvider(LLMProvider):
                 if _is_unavailable(exc):
                     raise LLMProviderUnavailableError("The language model is temporarily unavailable.") from exc
                 raise LLMProviderError("The language model request failed.") from exc
-        return _parse_response(response, self._model)
+        return _parse_response(response, self._model, self._provider_name)
 
 
 def _is_timeout(exc: Exception) -> bool:
@@ -184,7 +188,7 @@ def _validate_messages(messages: Sequence[ChatMessage]) -> None:
             raise LLMProviderError("Message content must be non-empty text.")
 
 
-def _parse_response(response: Any, requested_model: str) -> LLMResponse:
+def _parse_response(response: Any, requested_model: str, provider_name: str | None = None) -> LLMResponse:
     try:
         choice = response.choices[0]
         content = choice.message.content
@@ -209,6 +213,7 @@ def _parse_response(response: Any, requested_model: str) -> LLMResponse:
         finish_reason=finish_reason,
         prompt_tokens=getattr(usage, "prompt_tokens", None),
         completion_tokens=getattr(usage, "completion_tokens", None),
+        provider=provider_name,
     )
 
 
@@ -289,6 +294,7 @@ def create_llm_provider() -> LLMProvider:
         temperature=settings.llm_temperature,
         max_tokens=settings.llm_max_output_tokens,
         rate_limit_max_wait_seconds=0.0 if fallback_enabled else None,
+        provider_name="groq",
     )
     if not fallback_enabled:
         return primary
@@ -315,4 +321,5 @@ def create_local_provider() -> OpenAICompatibleLLMProvider:
         temperature=settings.llm_temperature,
         max_tokens=settings.lm_studio_max_output_tokens,
         rate_limit_max_wait_seconds=0.0,
+        provider_name="lm_studio",
     )

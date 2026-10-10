@@ -14,6 +14,9 @@ class PDFDocument(Protocol):
     def page_count(self) -> int: ...
 
 
+MAX_FILENAME_LENGTH = 255
+
+
 class PDFValidationError(ValueError):
     """Raised when an uploaded file is not safe or valid PDF input."""
 
@@ -22,6 +25,9 @@ def validate_pdf_upload(filename: str, content_type: str | None, content: bytes)
     """Validate a filename, MIME hint, size, and actual PDF structure."""
     if not filename.strip():
         raise PDFValidationError("A PDF filename is required.")
+
+    if len(filename) > MAX_FILENAME_LENGTH:
+        raise PDFValidationError(f"The PDF filename must be at most {MAX_FILENAME_LENGTH} characters.")
 
     if Path(filename).suffix.lower() != ".pdf":
         raise PDFValidationError("Only PDF files are supported.")
@@ -46,7 +52,11 @@ def validate_pdf_upload(filename: str, content_type: str | None, content: bytes)
         raise PDFValidationError("The uploaded file is not a valid PDF.") from exc
 
     try:
+        if document.needs_pass:
+            raise PDFValidationError("The PDF is password-protected and cannot be processed.")
         if document.page_count < 1:
             raise PDFValidationError("The PDF contains no pages.")
+        if document.page_count > settings.max_pdf_pages:
+            raise PDFValidationError(f"The PDF may contain at most {settings.max_pdf_pages} pages.")
     finally:
         document.close()

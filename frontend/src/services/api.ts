@@ -39,6 +39,8 @@ interface RequestOptions {
   /** Attach the bearer token (default true). Login is the only unauthenticated call. */
   auth?: boolean;
   signal?: AbortSignal;
+  /** Return the response body as a Blob (a protected file such as a submission preview) instead of JSON. */
+  blob?: boolean;
 }
 
 function sessionExpired(): ApiError {
@@ -68,7 +70,7 @@ function errorFields(payload: unknown): { code: string | null; message: string |
 export async function apiRequest<T>(
   method: "GET" | "POST",
   path: string,
-  { body, auth = true, signal }: RequestOptions = {},
+  { body, auth = true, signal, blob = false }: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   // FormData (file uploads) must not get a Content-Type: the browser adds it with the multipart boundary.
@@ -93,6 +95,7 @@ export async function apiRequest<T>(
     throw new ApiError(0, "NETWORK_ERROR", null);
   }
 
+  if (blob && response.ok) return (await response.blob()) as T;
   const payload = await readBody(response);
   if (!response.ok) {
     if (response.status === 401 && auth) throw sessionExpired();
@@ -107,6 +110,9 @@ export async function apiRequest<T>(
 
 export const api = {
   get: <T>(path: string, options?: Omit<RequestOptions, "body">) => apiRequest<T>("GET", path, options),
+  /** GET a protected file (bearer token attached) as a Blob. */
+  getBlob: (path: string, options?: Omit<RequestOptions, "body" | "blob">) =>
+    apiRequest<Blob>("GET", path, { ...options, blob: true }),
   post: <T>(path: string, body: unknown, options?: Omit<RequestOptions, "body">) =>
     apiRequest<T>("POST", path, { ...options, body }),
 };

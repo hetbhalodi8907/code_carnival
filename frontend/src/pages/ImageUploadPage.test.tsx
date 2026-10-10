@@ -11,7 +11,7 @@ const ADMIN: CurrentUser = {
   email: "ishaan.malhotra@nexora.example",
   full_name: "Ishaan Malhotra",
   roles: ["SUPER_ADMIN"],
-  permissions: ["documents:read", "documents:write", "finance:read"],
+  permissions: ["documents:read", "documents:write", "documents:submit", "documents:approve", "finance:read"],
 };
 const ME = { "GET /api/v1/auth/me": { body: ADMIN } };
 

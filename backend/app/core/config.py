@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     max_pdf_size_mb: int = 25
+    # Upper bound on pages per PDF, so a small but page-heavy (or malformed) file cannot cause unbounded extraction work.
+    max_pdf_pages: int = Field(default=500, ge=1)
     # Image (OCR) uploads.
     max_image_size_mb: int = Field(default=10, ge=1)
     max_image_pixels: int = Field(default=25_000_000, ge=1)
@@ -31,6 +33,12 @@ class Settings(BaseSettings):
     chunk_size: int = 4000
     chunk_overlap: int = 200
     document_storage_path: str = "data/documents"
+    # Files awaiting CEO approval. A directory of its own, never the active-document path, and never served.
+    quarantine_storage_path: str = "data/quarantine"
+    # A user cannot fill the quarantine disk: this many submissions may await review at once.
+    max_pending_submissions_per_user: int = Field(default=20, ge=1)
+    # An approval that stopped mid-way (crash) may be reclaimed after this long.
+    submission_stale_minutes: int = Field(default=10, ge=1)
 
     # Local embeddings by default: no API key, and no network after the first model download.
     embedding_provider: str = "sentence-transformers"

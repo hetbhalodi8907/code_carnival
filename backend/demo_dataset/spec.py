@@ -115,6 +115,8 @@ DEPARTMENTS: tuple[DepartmentSpec, ...] = (
 PERMISSIONS: tuple[PermissionSpec, ...] = (
     PermissionSpec("documents", "read", "Read documents the user has been granted."),
     PermissionSpec("documents", "write", "Create or update documents."),
+    PermissionSpec("documents", "submit", "Submit a PDF or image for CEO approval."),
+    PermissionSpec("documents", "approve", "Approve or reject submitted documents."),
     PermissionSpec("hr", "read", "Read Human Resources information."),
     PermissionSpec("hr", "write", "Manage Human Resources information."),
     PermissionSpec("finance", "read", "Read Finance information."),
@@ -135,27 +137,27 @@ ROLES: tuple[RoleSpec, ...] = (
     RoleSpec(
         "HR_MANAGER",
         "Manages Human Resources information.",
-        ("documents:read", "hr:read", "hr:write", "employee:self_read"),
+        ("documents:read", "documents:submit", "hr:read", "hr:write", "employee:self_read"),
     ),
     RoleSpec(
         "FINANCE_MANAGER",
         "Manages Finance and procurement information.",
-        ("documents:read", "finance:read", "finance:write", "employee:self_read"),
+        ("documents:read", "documents:submit", "finance:read", "finance:write", "employee:self_read"),
     ),
     RoleSpec(
         "ENGINEERING_MANAGER",
         "Manages Engineering information.",
-        ("documents:read", "engineering:read", "engineering:write", "employee:self_read"),
+        ("documents:read", "documents:submit", "engineering:read", "engineering:write", "employee:self_read"),
     ),
     RoleSpec(
         "SECURITY_MANAGER",
         "Manages Security information.",
-        ("documents:read", "security:read", "security:write", "employee:self_read"),
+        ("documents:read", "documents:submit", "security:read", "security:write", "employee:self_read"),
     ),
     RoleSpec(
         "EMPLOYEE",
         "Standard employee access to company-wide information and the user's own records.",
-        ("documents:read", "employee:self_read"),
+        ("documents:read", "documents:submit", "employee:self_read"),
     ),
 )
 

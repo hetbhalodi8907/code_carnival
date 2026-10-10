@@ -8,7 +8,7 @@ unknown fields such as ``user_id`` or ``role`` are rejected.
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.services.vector_search import VectorSearchService
 
@@ -63,6 +63,71 @@ class AssistantSource(BaseModel):
     )
 
 
+# Document chat: earlier turns are context for follow-ups, never evidence, so they are small and bounded.
+MAX_HISTORY_TURNS = 10
+MAX_HISTORY_TURN_LENGTH = 4_000
+MAX_HISTORY_TOTAL_LENGTH = 16_000
+DOCUMENT_CHAT_TOP_K = 6
+
+HistoryText = Annotated[
+    str,
+    StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=MAX_HISTORY_TURN_LENGTH),
+]
+
+
+class ChatTurn(BaseModel):
+    """One earlier turn. Only user and assistant turns exist: a client cannot supply a system message."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    role: Literal["user", "assistant"]
+    content: HistoryText
+
+
+class DocumentQuery(BaseModel):
+    """A question about ONE document, with the recent turns of the same session.
+
+    It carries no identity or permission: the user comes from the bearer token, and the server decides
+    whether that user may read ``document_id``. Unknown fields are rejected.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    document_id: UUID
+    query: QueryText
+    history: list[ChatTurn] = Field(default_factory=list, max_length=MAX_HISTORY_TURNS)
+
+    @model_validator(mode="after")
+    def _bounded_history(self) -> "DocumentQuery":
+        if sum(len(turn.content) for turn in self.history) > MAX_HISTORY_TOTAL_LENGTH:
+            raise ValueError("The conversation history is too long.")
+        return self
+
+
+class TrustProof(BaseModel):
+    """What the server can substantiate about one generated answer. Present only for status "answered".
+
+    It holds no prompt, completion, passage text or hidden-source metadata. A validated citation
+    shows that a cited source was retrieved for this user; it does not prove the statement is correct.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    authorization: Literal["access_controlled_retrieval"] = Field(
+        description=(
+            "Set only after the server confirmed this answer's context was built by the authorization-aware "
+            "retrieval for the authenticated user and the model was called with exactly that context."
+        )
+    )
+    authorized_source_count: int = Field(
+        ge=0, description="Number of final sources returned to the user in `sources` (never hidden results)."
+    )
+    provider: str | None = Field(
+        default=None, description="Provider that produced the answer after any fallback (groq, lm_studio); null if unknown."
+    )
+    model: str | None = Field(default=None, description="Model that produced the answer; null if unknown.")
+
+
 class AssistantQueryResponse(BaseModel):
     """Answer to an assistant query, with the authorized sources it was based on."""
 
@@ -97,4 +162,8 @@ class AssistantQueryResponse(BaseModel):
         default="not_applicable",
         description="passed: every marker matched a retrieved source. partial: some markers or identifiers "
         "were removed. none: the answer cites no retrieved source. not_applicable: no model answer.",
+    )
+    trust_proof: TrustProof | None = Field(
+        default=None,
+        description="Verifiable receipt for an answered query. Null for every other status (including access_denied).",
     )

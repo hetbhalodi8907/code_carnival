@@ -2,18 +2,9 @@ import { AlertTriangle, CalendarClock, CheckCircle2, Users } from "lucide-react"
 
 import { MilestoneList } from "@/components/dashboard/MilestoneList";
 import { ProjectList } from "@/components/dashboard/ProjectList";
-import { BarList, EmptyNote, Panel } from "@/components/dashboard/primitives";
+import { BarList, EmptyNote, Panel, SectionTitle } from "@/components/dashboard/primitives";
 import { formatPercent } from "@/lib/dashboardFormat";
 import type { ProjectsSection } from "@/types/dashboard";
-
-function SubHeading({ icon: Icon, children }: { icon: typeof Users; children: string }) {
-  return (
-    <h3 className="mb-3 flex items-center gap-2 text-[13.5px] font-semibold">
-      <Icon className="size-4 text-subtle" aria-hidden="true" />
-      {children}
-    </h3>
-  );
-}
 
 export function ProjectsPanel({ data }: { data: ProjectsSection }) {
   return (
@@ -22,9 +13,9 @@ export function ProjectsPanel({ data }: { data: ProjectsSection }) {
       title="Projects"
       description={`${data.scope_label} · ${data.total} ${data.total === 1 ? "project" : "projects"}, ${data.active} in progress`}
     >
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 *:min-w-0 lg:grid-cols-3">
         <div>
-          <SubHeading icon={CheckCircle2}>Projects by status</SubHeading>
+          <SectionTitle icon={CheckCircle2}>Projects by status</SectionTitle>
           <BarList rows={data.by_status.map((s) => ({ label: s.label, value: s.count }))} emptyText="No projects recorded." />
           <p className="mt-4 text-[13px] text-muted-foreground">
             Milestone completion:{" "}
@@ -36,11 +27,11 @@ export function ProjectsPanel({ data }: { data: ProjectsSection }) {
           </p>
         </div>
         <div>
-          <SubHeading icon={CalendarClock}>Upcoming milestones</SubHeading>
+          <SectionTitle icon={CalendarClock}>Upcoming milestones</SectionTitle>
           <MilestoneList items={data.upcoming_milestones} empty="No open milestones." />
         </div>
         <div>
-          <SubHeading icon={AlertTriangle}>Blockers and delays</SubHeading>
+          <SectionTitle icon={AlertTriangle}>Blockers and delays</SectionTitle>
           {data.blocked_milestones.length === 0 && data.delayed_projects.length === 0 ? (
             <EmptyNote>No blocked milestones or projects past their target date are recorded.</EmptyNote>
           ) : (
@@ -60,14 +51,14 @@ export function ProjectsPanel({ data }: { data: ProjectsSection }) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-8 grid gap-6 *:min-w-0 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <SubHeading icon={Users}>All projects in scope</SubHeading>
+          <SectionTitle icon={Users}>All projects in scope</SectionTitle>
           <ProjectList projects={data.projects} empty="No projects are available to your account." />
         </div>
         <div className="flex flex-col gap-6">
           <div>
-            <SubHeading icon={Users}>Open projects per person</SubHeading>
+            <SectionTitle icon={Users}>Open projects per person</SectionTitle>
             <BarList
               rows={data.workload.map((w) => ({ label: w.name, value: w.active_projects }))}
               emptyText="No assignments are recorded."
@@ -75,7 +66,7 @@ export function ProjectsPanel({ data }: { data: ProjectsSection }) {
             />
           </div>
           <div>
-            <SubHeading icon={CheckCircle2}>Recent updates</SubHeading>
+            <SectionTitle icon={CheckCircle2}>Recent updates</SectionTitle>
             <MilestoneList items={data.recent_updates} empty="No milestones have been completed yet." showCompleted />
           </div>
         </div>

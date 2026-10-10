@@ -88,6 +88,7 @@ class LocalOnlyConfigurationTests(unittest.TestCase):
         self.assertIs(type(built), OpenAICompatibleLLMProvider)  # no fallback wrapper, no Groq provider
         self.assertNotIsInstance(built, FallbackLLMProvider)
         self.assertEqual(built.model, MODEL)
+        self.assertEqual(built._provider_name, "lm_studio")
         self.assertEqual(str(built._client.base_url), "http://127.0.0.1:1235/v1/")
         self.assertEqual(built._client.max_retries, 0)  # no hidden retry loop
         self.assertEqual(built._client.timeout, 75.0)  # configurable

@@ -6,6 +6,7 @@ from app.models.document_chunk import DocumentChunk
 from app.models.permission import Permission
 from app.models.role import Role
 from app.models.role_permission import RolePermission
+from app.models.submission import DocumentSubmission
 from app.models.structured import (
     EmployeeCompensation,
     Project,
@@ -22,6 +23,7 @@ __all__ = [
     "Document",
     "DocumentChunk",
     "DocumentRoleAccess",
+    "DocumentSubmission",
     "DocumentUserAccess",
     "EmployeeCompensation",
     "Permission",

@@ -79,8 +79,14 @@ class VectorSearchService:
         *,
         top_k: int,
         user_id: UUID,
+        document_id: UUID | None = None,
     ) -> list[VectorSearchResult]:
-        """Return the user's top_k authorized chunks ordered by ascending cosine distance."""
+        """Return the user's top_k authorized chunks ordered by ascending cosine distance.
+
+        ``document_id`` narrows the search to one document. It is an extra condition in the same
+        statement as the authorization predicate, so it can only ever REMOVE rows: a document the
+        user may not read still yields nothing.
+        """
         if not 1 <= top_k <= self._max_top_k:
             raise VectorSearchError(f"top_k must be between 1 and {self._max_top_k}.")
         if len(query_embedding) != self._embedding_dimension:
@@ -94,7 +100,7 @@ class VectorSearchService:
         session = self._session_factory()
         try:
             result = await session.execute(
-                self._build_statement(list(query_embedding), top_k=top_k, user_id=user_id)
+                self._build_statement(list(query_embedding), top_k=top_k, user_id=user_id, document_id=document_id)
             )
             rows = result.all()
         except Exception as exc:
@@ -127,6 +133,7 @@ class VectorSearchService:
         top_k: int,
         embedding_service: EmbeddingService,
         user_id: UUID,
+        document_id: UUID | None = None,
     ) -> list[VectorSearchResult]:
         """Embed a text query with the configured model, then search."""
         if not query.strip():
@@ -134,11 +141,13 @@ class VectorSearchService:
         if embedding_service.model != self._embedding_model:
             raise VectorSearchError("Query embedding model does not match the search model.")
         query_embedding = await embedding_service.embed_text(query)
-        return await self.search(query_embedding, top_k=top_k, user_id=user_id)
+        return await self.search(query_embedding, top_k=top_k, user_id=user_id, document_id=document_id)
 
-    def _build_statement(self, query_embedding: list[float], *, top_k: int, user_id: UUID) -> Select:
+    def _build_statement(
+        self, query_embedding: list[float], *, top_k: int, user_id: UUID, document_id: UUID | None = None
+    ) -> Select:
         distance = models.DocumentChunk.embedding.cosine_distance(query_embedding)
-        return (
+        statement = (
             select(models.DocumentChunk, distance.label("distance"))
             # Titles come from this same statement, so labelling results never needs a
             # second query.
@@ -151,3 +160,7 @@ class VectorSearchService:
             .order_by(distance, models.DocumentChunk.id)
             .limit(top_k)
         )
+        if document_id is not None:
+            # Scoped chat: the same WHERE clause, so it applies before ORDER BY and LIMIT.
+            statement = statement.where(models.DocumentChunk.document_id == document_id)
+        return statement

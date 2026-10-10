@@ -6,23 +6,23 @@ import type { MilestoneItem } from "@/types/dashboard";
 export function MilestoneList({ items, empty, showCompleted = false }: { items: MilestoneItem[]; empty: string; showCompleted?: boolean }) {
   if (items.length === 0) return <EmptyNote>{empty}</EmptyNote>;
   return (
-    <ul className="divide-y divide-border">
+    <ul className="m-0 list-none divide-y divide-border p-0">
       {items.map((m) => (
-        <li key={`${m.project_code}-${m.title}`} className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 py-2.5 first:pt-0 last:pb-0">
-          <div className="min-w-0">
-            <p className="text-[13.5px] font-medium">{m.title}</p>
-            <p className="text-xs text-subtle">
-              {m.project_code} · {m.project_name}
-            </p>
-            {m.blocker_note ? <p className="mt-1 text-xs text-destructive-strong">Blocker: {m.blocker_note}</p> : null}
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+        <li key={`${m.project_code}-${m.title}`} className="py-2.5 first:pt-0 last:pb-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-medium leading-snug">{m.title}</p>
+              <p className="text-xs text-muted-foreground">
+                {m.project_code} · {m.project_name}
+              </p>
+            </div>
             <StatusBadge status={m.status} />
-            <span className="text-xs text-muted-foreground">
-              {showCompleted && m.completed_on ? `Completed ${formatDate(m.completed_on)}` : `Due ${formatDate(m.due_date)}`}
-              {m.overdue ? <span className="font-semibold text-destructive-strong"> · Overdue</span> : null}
-            </span>
           </div>
+          {m.blocker_note ? <p className="mt-1 text-xs leading-snug text-destructive-strong">Blocker: {m.blocker_note}</p> : null}
+          <p className="mt-1 text-xs text-muted-foreground">
+            {showCompleted && m.completed_on ? `Completed ${formatDate(m.completed_on)}` : `Due ${formatDate(m.due_date)}`}
+            {m.overdue ? <span className="font-semibold text-destructive-strong"> · Overdue</span> : null}
+          </p>
         </li>
       ))}
     </ul>

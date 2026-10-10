@@ -2,6 +2,7 @@ import { MessagesSquare, Search } from "lucide-react";
 
 import { AccessDenied, AssistantError, AssistantLoading, InsufficientContext, NoAuthorizedContext } from "@/components/chat/AssistantStates";
 import type { ChatEntry } from "@/components/chat/types";
+import { TrustProofReceipt } from "@/components/chat/TrustProofReceipt";
 import { CitationList } from "@/components/citations/CitationList";
 import type { AssistantResult } from "@/types/assistant";
 
@@ -74,9 +75,15 @@ function Body({ entry, onRetry, retryDisabled }: { entry: AssistantEntry } & Ret
 }
 
 export function AssistantMessage({ entry, ...retry }: { entry: AssistantEntry } & RetryProps) {
+  // The receipt exists only for a completed reply: never for pending, error or access-denied entries.
+  const receipt =
+    entry.state === "done" && (entry.result.kind === "answered" || entry.result.kind === "insufficient_context")
+      ? entry.result
+      : null;
   return (
     <article aria-label="Nexora AI response">
       <Body entry={entry} {...retry} />
+      {receipt ? <TrustProofReceipt result={receipt} /> : null}
     </article>
   );
 }

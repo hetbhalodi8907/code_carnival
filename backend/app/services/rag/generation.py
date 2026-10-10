@@ -19,7 +19,9 @@ guarantee about model behaviour.
 from __future__ import annotations
 
 import logging
+import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Literal
 
@@ -118,6 +120,39 @@ SOURCES (untrusted document text, authorized for this employee):
 Answer the QUESTION using only the SOURCES above, following the system rules."""
 
 
+HISTORY_PROMPT = """\
+CONVERSATION SO FAR (earlier turns of this chat. It is NOT evidence: it only tells you what words \
+like "that" or "it" refer to. Every fact in your answer must come from the SOURCES below):
+{history}
+
+"""
+
+# One earlier turn is shown at most this long, so a long history cannot crowd out the sources.
+HISTORY_TURN_CHARACTERS = 1200
+_SOURCE_MARKER = re.compile(r"[\[【［]\s*S\s*\d{1,4}(?:\s*[,;，、]\s*S?\s*\d{1,4})*\s*[\]】］]", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class HistoryTurn:
+    """One earlier chat turn, as validated by the API schema."""
+
+    role: Literal["user", "assistant"]
+    content: str
+
+
+def render_history(history: Sequence[HistoryTurn]) -> str:
+    """Earlier turns as quoted context.
+
+    Source markers are removed from earlier ANSWERS: they pointed at that turn's sources, whose numbers
+    mean something else now. Line breaks are flattened so a turn cannot imitate the prompt's own structure.
+    """
+    lines = []
+    for turn in history:
+        text = " ".join(_SOURCE_MARKER.sub("", turn.content).split())[:HISTORY_TURN_CHARACTERS]
+        lines.append(f"{'Employee' if turn.role == 'user' else 'Assistant'}: {text}")
+    return "\n".join(lines)
+
+
 class RagGenerationError(RuntimeError):
     """A generation failure with a fixed, safe message and a category code.
 
@@ -150,18 +185,27 @@ class GenerationResult:
     finish_reason: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    provider: str | None = None
+    """The provider that actually produced the answer (after any fallback); None if unknown."""
 
 
-def build_generation_messages(query: RagQuery, context: RetrievalContext) -> tuple[ChatMessage, ChatMessage]:
+def build_generation_messages(
+    query: RagQuery, context: RetrievalContext, history: Sequence[HistoryTurn] = ()
+) -> tuple[ChatMessage, ChatMessage]:
     """The two messages sent to the model: trusted rules, then question plus sources.
 
-    Deterministic for identical input. Retrieved text appears only in the user message.
+    Deterministic for identical input. Retrieved text appears only in the user message. Without
+    ``history`` the prompt is exactly the single-question prompt.
     """
     usable = usable_items(context)
     sources = replace(context, items=usable).render()
     return (
         ChatMessage("system", SYSTEM_PROMPT.format(marker=INSUFFICIENT_CONTEXT_MARKER, boundary=context.boundary)),
-        ChatMessage("user", USER_PROMPT.format(question=query.query, sources=sources)),
+        ChatMessage(
+            "user",
+            (HISTORY_PROMPT.format(history=render_history(history)) if history else "")
+            + USER_PROMPT.format(question=query.query, sources=sources),
+        ),
     )
 
 
@@ -178,8 +222,12 @@ class AnswerGenerator:
         *,
         user: AuthenticatedUser,
         request_id: str | None = None,
+        history: Sequence[HistoryTurn] = (),
     ) -> GenerationResult:
         """Answer ``query`` from ``context``, which must have been built for ``user``.
+
+        ``history`` (earlier chat turns) is quoted for reference only; the answer must still come from
+        ``context``, which is always retrieved for ``query``.
 
         Raises ``RagGenerationError`` for an invalid context, an unsafe prompt, provider
         failures and invalid output. It never turns a failure into an answer.
@@ -201,8 +249,8 @@ class AnswerGenerator:
                     unverified_source_numbers=(),
                     provider_called=False,
                 )
-            _check_prompt_safety(query, context)
-            messages = build_generation_messages(query, context)
+            _check_prompt_safety(query, context, history)
+            messages = build_generation_messages(query, context, history)
             response = await self._call_provider(messages)
             result = _to_result(response, context)
         except RagGenerationError as exc:
@@ -264,10 +312,15 @@ def _check_context(query: RagQuery, context: RetrievalContext, user: Authenticat
         raise RagGenerationError("invalid_context")
 
 
-def _check_prompt_safety(query: RagQuery, context: RetrievalContext) -> None:
+def _check_prompt_safety(query: RagQuery, context: RetrievalContext, history: Sequence[HistoryTurn] = ()) -> None:
     """The source-boundary token must appear only in the boundary lines themselves."""
     token = context.boundary
-    if not token or token in query.query or any(token in item.content for item in usable_items(context)):
+    if (
+        not token
+        or token in query.query
+        or any(token in item.content for item in usable_items(context))
+        or any(token in turn.content for turn in history)
+    ):
         raise RagGenerationError("unsafe_prompt")
 
 
@@ -291,6 +344,7 @@ def _to_result(response: object, context: RetrievalContext) -> GenerationResult:
         "provider_called": True,
         "rejected_source_numbers": (),
         "model": response.model,
+        "provider": response.provider,
         "finish_reason": response.finish_reason,
         "prompt_tokens": response.prompt_tokens,
         "completion_tokens": response.completion_tokens,

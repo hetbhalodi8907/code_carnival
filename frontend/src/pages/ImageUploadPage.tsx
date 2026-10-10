@@ -2,7 +2,9 @@ import { ImageUp, Lock, ScanText } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { UploadLocked } from "@/components/documents/UploadLocked";
+import { ReviewUploadPage } from "@/components/submissions/ReviewUploadPage";
 import { FileDropzone } from "@/components/documents/FileDropzone";
+import { DocumentChat } from "@/components/documents/DocumentChat";
 import { ImageIndexedOutcome, ImageIndexingFailedOutcome } from "@/components/documents/ImageOutcome";
 import { SelectedFile } from "@/components/documents/SelectedFile";
 import { Alert } from "@/components/ui/alert";
@@ -36,7 +38,9 @@ export function ImageUploadPage() {
   const canUpload = user?.permissions.includes("documents:write") ?? false;
   const busy = phase.kind === "uploading" || phase.kind === "indexing";
 
-  if (!canUpload) return <UploadLocked kind="images" />;
+  // Accounts without documents:write submit images for CEO approval instead of ingesting them directly.
+  const canSubmit = user?.permissions.includes("documents:submit") ?? false;
+  if (!canUpload) return canSubmit ? <ReviewUploadPage kind="image" /> : <UploadLocked kind="images" />;
 
   function choose(files: File[]) {
     if (busy) return;
@@ -113,7 +117,7 @@ export function ImageUploadPage() {
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-[720px] flex-col gap-4 p-4 sm:p-6">
+      <div className="mx-auto flex max-w-[820px] flex-col gap-4 p-4 sm:p-6">
         <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5" aria-label="Upload an image">
           <div className="space-y-3">
             {file ? (
@@ -154,7 +158,13 @@ export function ImageUploadPage() {
           </div>
         </section>
 
-        {phase.kind === "ready" ? <ImageIndexedOutcome image={phase.image} onReset={reset} /> : null}
+        {phase.kind === "ready" ? (
+          <>
+            <ImageIndexedOutcome image={phase.image} onReset={reset} />
+            {/* OCR text was extracted and indexed once at upload; questions never re-run OCR. */}
+            <DocumentChat key={phase.image.id} documentId={phase.image.id} filename={phase.image.filename} kind="image" />
+          </>
+        ) : null}
         {phase.kind === "index_failed" ? (
           <ImageIndexingFailedOutcome
             image={phase.image}

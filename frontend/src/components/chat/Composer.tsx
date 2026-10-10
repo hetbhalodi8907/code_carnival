@@ -13,9 +13,26 @@ interface ComposerProps {
   onSubmit: () => void;
   pending: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
+  /** Optional wording for other chats; the defaults are the main assistant's. */
+  inputId?: string;
+  label?: string;
+  placeholder?: string;
+  footnote?: string;
+  sendLabel?: string;
 }
 
-export function Composer({ value, onChange, onSubmit, pending, textareaRef }: ComposerProps) {
+export function Composer({
+  value,
+  onChange,
+  onSubmit,
+  pending,
+  textareaRef,
+  inputId = "question",
+  label = "Ask a question",
+  placeholder = "Ask a question about company knowledge…",
+  footnote = "Results are limited to sources your account may read.",
+  sendLabel = "Send question",
+}: ComposerProps) {
   // Grow with the content; max-h on the textarea caps it.
   useLayoutEffect(() => {
     const element = textareaRef.current;
@@ -42,28 +59,28 @@ export function Composer({ value, onChange, onSubmit, pending, textareaRef }: Co
         }}
         className="flex items-end gap-2.5 rounded-xl border border-border-strong bg-card py-2 pl-3.5 pr-2 shadow-xs transition-[border-color,box-shadow] focus-within:border-primary focus-within:ring-[3px] focus-within:ring-ring"
       >
-        <label htmlFor="question" className="sr-only">
-          Ask a question
+        <label htmlFor={inputId} className="sr-only">
+          {label}
         </label>
         <Textarea
-          id="question"
+          id={inputId}
           ref={textareaRef}
           rows={1}
           value={value}
           maxLength={MAX_QUESTION_LENGTH}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask a question about company knowledge…"
+          placeholder={placeholder}
           className="max-h-[140px] min-h-[36px] flex-1 py-1.5"
         />
-        <Button type="submit" size="icon" disabled={!canSend} aria-label="Send question" className="size-10">
+        <Button type="submit" size="icon" disabled={!canSend} aria-label={sendLabel} className="size-10">
           {pending ? <Spinner className="size-[18px]" /> : <Send className="size-[18px]" aria-hidden="true" />}
         </Button>
       </form>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="inline-flex items-center gap-[7px] text-xs text-subtle">
           <Lock className="size-3.5" aria-hidden="true" />
-          Results are limited to sources your account may read.
+          {footnote}
         </span>
         <span className="hidden text-[11.5px] text-subtle sm:inline">
           <kbd className="rounded-[5px] border border-b-2 border-border bg-muted px-[5px] py-px font-mono text-[11px] text-muted-foreground">Enter</kbd>{" "}

@@ -1,7 +1,7 @@
 import { CircleAlert, Database, FileText, FolderKanban, MessagesSquare, PiggyBank, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { Link } from "react-router";
 
-import { DashboardSkeleton, EmptyNote, MetricCard, UnavailableList } from "@/components/dashboard/primitives";
+import { DashboardSkeleton, EmptyNote, MetricCard, StatGrid, UnavailableList } from "@/components/dashboard/primitives";
 import { FinancePanel } from "@/components/dashboard/FinancePanel";
 import { DocumentsPanel, MyWorkPanel, SecurityPanel, WorkforcePanel } from "@/components/dashboard/OtherPanels";
 import { ProjectsPanel } from "@/components/dashboard/ProjectsPanel";
@@ -50,7 +50,8 @@ function Highlights({ data }: { data: DashboardOverview }) {
   const { projects, finance, workforce, security, documents, my_work: myWork } = data;
   const firstCurrency = finance?.currencies[0];
   return (
-    <section aria-label="Key figures" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section aria-label="Key figures">
+      <StatGrid>
       {projects ? (
         <MetricCard label="Projects" value={projects.total} icon={FolderKanban} hint={`${projects.active} in progress · ${projects.scope_label}`} />
       ) : (
@@ -68,12 +69,15 @@ function Highlights({ data }: { data: DashboardOverview }) {
       ) : null}
       {security ? <MetricCard label="Roles and permissions" value={`${security.roles.length} / ${security.permission_count}`} icon={ShieldCheck} hint="Defined in the access-control model" /> : null}
       <MetricCard label="Readable documents" value={documents.total} icon={FileText} hint={`${documents.fully_indexed} fully indexed`} />
+      </StatGrid>
     </section>
   );
 }
 
 function Shortcuts({ data, permissions }: { data: DashboardOverview; permissions: readonly string[] }) {
-  const canUpload = permissions.includes("documents:write");
+  // Accounts that cannot ingest directly still get the upload pages, where they submit files for CEO approval.
+  const canUpload = permissions.includes("documents:write") || permissions.includes("documents:submit");
+  const canApprove = permissions.includes("documents:approve");
   const link = cn(buttonVariants({ variant: "secondary", size: "sm" }));
   return (
     <nav aria-label="Shortcuts" className="flex flex-wrap gap-2">
@@ -87,6 +91,7 @@ function Shortcuts({ data, permissions }: { data: DashboardOverview; permissions
           <Link to="/app/upload-image" className={link}>Upload an image</Link>
         </>
       ) : null}
+      {canApprove ? <Link to="/app/approvals" className={link}>Approval queue</Link> : null}
       {data.projects ? <a href="#projects" className={link}>Project details</a> : null}
       {data.finance ? <a href="#finance" className={link}>Finance details</a> : null}
     </nav>
@@ -101,11 +106,11 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      <div className="mx-auto flex max-w-[1240px] flex-col gap-[18px] p-4 sm:p-5 lg:p-6">
-        <header className="flex flex-wrap items-start justify-between gap-3">
+      <div className="mx-auto flex w-full max-w-[1240px] min-w-0 flex-col gap-5 p-4 sm:p-5 lg:p-6">
+        <header className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-xl font-semibold tracking-tight">Welcome, {user.full_name.split(" ")[0]}</h2>
-            <p className="mt-1 flex flex-wrap items-center gap-2 text-[13.5px] text-muted-foreground">
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[13.5px] text-muted-foreground">
               <span>{user.roles.map(roleLabel).join(", ") || "No role assigned"}</span>
               {data?.user.department ? <span>· {data.user.department}</span> : null}
               <Badge variant="muted" title={data?.dataset_note}>
@@ -114,8 +119,8 @@ export function DashboardPage() {
               </Badge>
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            {data ? <span className="hidden text-xs text-subtle sm:inline">Updated {formatDateTime(data.generated_at)}</span> : null}
+          <div className="flex shrink-0 items-center gap-3">
+            {data ? <span className="hidden text-xs text-muted-foreground sm:inline">Updated {formatDateTime(data.generated_at)}</span> : null}
             <Button variant="secondary" size="sm" onClick={refresh} disabled={loading} aria-label="Refresh dashboard">
               {loading ? <Spinner /> : <RefreshCw aria-hidden="true" />}
               Refresh

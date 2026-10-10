@@ -1,7 +1,9 @@
 import { FileUp, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { DocumentChat } from "@/components/documents/DocumentChat";
 import { UploadLocked } from "@/components/documents/UploadLocked";
+import { ReviewUploadPage } from "@/components/submissions/ReviewUploadPage";
 import { FileDropzone } from "@/components/documents/FileDropzone";
 import { SelectedFile } from "@/components/documents/SelectedFile";
 import { IndexedOutcome, IndexingFailedOutcome } from "@/components/documents/UploadOutcome";
@@ -35,7 +37,9 @@ export function UploadPage() {
   const canUpload = user?.permissions.includes("documents:write") ?? false;
   const busy = phase.kind === "uploading" || phase.kind === "indexing";
 
-  if (!canUpload) return <UploadLocked kind="PDFs" />;
+  // Accounts without documents:write submit PDFs for CEO approval instead of ingesting them directly.
+  const canSubmit = user?.permissions.includes("documents:submit") ?? false;
+  if (!canUpload) return canSubmit ? <ReviewUploadPage kind="pdf" /> : <UploadLocked kind="PDFs" />;
 
   function choose(files: File[]) {
     if (busy) return;
@@ -119,7 +123,7 @@ export function UploadPage() {
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-[720px] flex-col gap-4 p-4 sm:p-6">
+      <div className="mx-auto flex max-w-[820px] flex-col gap-4 p-4 sm:p-6">
         <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5" aria-label="Upload a PDF">
           <div className="space-y-3">
             {file ? (
@@ -154,7 +158,11 @@ export function UploadPage() {
         </section>
 
         {phase.kind === "ready" ? (
-          <IndexedOutcome document={phase.document} indexed={phase.indexed} onReset={reset} />
+          <>
+            <IndexedOutcome document={phase.document} indexed={phase.indexed} onReset={reset} />
+            {/* Reached only from a confirmed "completed" indexing response. The key gives each document its own conversation. */}
+            <DocumentChat key={phase.document.id} documentId={phase.document.id} filename={phase.document.filename} kind="pdf" />
+          </>
         ) : null}
         {phase.kind === "index_failed" ? (
           <IndexingFailedOutcome

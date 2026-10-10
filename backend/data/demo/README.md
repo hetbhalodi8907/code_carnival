@@ -123,7 +123,7 @@ It is idempotent and additive: 8 projects, 2 compensation rows (Kabir Sethi INR 
 - Kabir Sethi: "What is my revised annual CTC?" (answered, INR 11.4 lakh) and "What is Rahul Gupta's revised annual CTC?" (refused: his row is not readable and the document is not granted).
 - Meera Iyer (HR Manager): "What is Rahul Gupta's CTC?" (answered, `hr:read`). Vikram Nair (Finance Manager): "What is Kabir Sethi's salary?" (refused).
 
-Upload your own: `POST /api/v1/documents/ingest` (PDF) or `/documents/ingest-image` (PNG/JPEG) as SUPER_ADMIN (the only demo role with `documents:write`). The upload is embedded immediately and is retrievable only by the uploader until grants are added.
+Upload your own: `POST /api/v1/documents/ingest` (PDF) or `/documents/ingest-image` (PNG/JPEG) as SUPER_ADMIN (the only demo role with `documents:write`); other roles submit through `POST /api/v1/document-submissions` and the CEO approves. The upload is embedded immediately and is retrievable only by the uploader until grants are added.
 
 ## Dashboard demo data
 
@@ -182,7 +182,7 @@ Frontend: the **Upload** page, `/app/upload` (SUPER_ADMIN). It makes one request
 
 ### Upload an image for OCR
 
-Frontend: the **Upload images** page, `/app/upload-image`. Like the PDF page, it requires `documents:write` (only SUPER_ADMIN in the demo; other accounts see a locked page). One request runs real OCR (RapidOCR, no operating-system install), stores the text as chunks, and embeds them with the local `all-MiniLM-L6-v2` model; Retry indexing is offered if embedding fails. API: `POST /api/v1/documents/ingest-image`, same shape, field `file`, PNG or JPEG up to 10 MB, `documents:write`. It runs real OCR, chunks, embeds and indexes in one request (`ocr_line_count`, `ocr_mean_confidence`, `embedding_status` in the response). No text found gives 422; OCR missing gives 503. Without the frontend, use `/docs` (Authorize with the login token, then "Try it out") or:
+Frontend: the **Upload images** page, `/app/upload-image`. Like the PDF page, direct upload requires `documents:write` (only SUPER_ADMIN in the demo); every other demo role holds `documents:submit` and submits the image for CEO approval instead (see the root README, "CEO approval workflow"). One request runs real OCR (RapidOCR, no operating-system install), stores the text as chunks, and embeds them with the local `all-MiniLM-L6-v2` model; Retry indexing is offered if embedding fails. API: `POST /api/v1/documents/ingest-image`, same shape, field `file`, PNG or JPEG up to 10 MB, `documents:write`. It runs real OCR, chunks, embeds and indexes in one request (`ocr_line_count`, `ocr_mean_confidence`, `embedding_status` in the response). No text found gives 422; OCR missing gives 503. Without the frontend, use `/docs` (Authorize with the login token, then "Try it out") or:
 
 ```bash
 TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"ishaan.malhotra@nexora.example","password":"<demo password>"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
